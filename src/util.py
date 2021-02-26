@@ -9,7 +9,7 @@ import pickle
 import warnings
 
 from scipy.io import wavfile
-from scipy.signal import hilbert
+from scipy.signal import butter, filtfilt, hilbert
 
 from defaults import EPS
 
@@ -31,6 +31,20 @@ def load_data(path: str):
 
     with open(path, 'rb') as handle:
         return pickle.load(handle)
+
+
+def low_pass(
+        signal: np.ndarray,
+        frequency: float,
+        sample_rate: int,
+        order: int = 16
+):
+    """
+    Convenience function for butterworth lowpass filter.
+    """
+    Wn = frequency/(sample_rate / 2)
+    [b, a] = butter(order, Wn, btype='lowpass')
+    return filtfilt(b, a, signal)
 
 
 def normalize(x: np.ndarray) -> np.ndarray:
