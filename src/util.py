@@ -2,16 +2,26 @@
 General utilities.
 """
 
+import librosa
 import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pickle
 import warnings
 
-from scipy.io import wavfile
+from librosa import load
+from scipy.interpolate import interp1d
 from scipy.signal import butter, filtfilt, hilbert
 
-from defaults import EPS
+from defaults import EPS, PITCH_RATE, SAMPLE_RATE
+
+
+def flatten(signal: np.ndarray) -> np.ndarray:
+    """
+    Replace an array values with its mean.
+    """
+    mean_ = np.mean(signal)
+    return np.tile(mean_, len(signal))
 
 
 def force_mono(signal: np.ndarray) -> np.ndarray:
@@ -55,10 +65,7 @@ def normalize(x: np.ndarray) -> np.ndarray:
 
 
 def read_wav(path: str):
-    # Suppress wavfile complaints.
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore")
-        sample_rate, x = wavfile.read(path)
+    x, sample_rate = load(path, sr=SAMPLE_RATE, dtype=np.float64)
     return sample_rate, x
 
 
@@ -73,6 +80,21 @@ def save_data(path: str, data, force: bool = False):
     print('Saving file {}...'.format(os.path.basename(path)))
     with open(path, 'wb') as handle:
         pickle.dump(data, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+
+def stft_plot(
+    signal: np.ndarray,
+    sample_rate: int = SAMPLE_RATE,
+    title: str = "",
+    show: bool = True
+):
+    X = librosa.stft(signal)
+    Xdb = librosa.amplitude_to_db(abs(X))
+    plt.figure(figsize=(5, 5))
+    plt.title(title)
+    librosa.display.specshow(Xdb, sr=sample_rate, x_axis="time", y_axis="linear")
+    if show:
+        plt.show()
 
 
 def time_plot(
@@ -121,3 +143,18 @@ def trim_silence(
         0
     )
     return signal[start_index:]
+
+
+def upsample(
+        hz: np.ndarray,
+        sr: int = SAMPLE_RATE,
+        pr: int = PITCH_RATE
+) -> np.ndarray:
+    _indices = np.arange(len(hz)) * sr / pr
+    f = interp1d(_indices, hz, kind='cubic')
+
+    num_samples = int(
+        round((len(hz) - 1) * SAMPLE_RATE / PITCH_RATE)
+    )
+
+    return f(np.arange(num_samples))
