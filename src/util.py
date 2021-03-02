@@ -12,6 +12,7 @@ import warnings
 from librosa import load
 from scipy.interpolate import interp1d
 from scipy.signal import butter, filtfilt, hilbert
+from typing import Union
 
 from defaults import EPS, PITCH_RATE, SAMPLE_RATE
 
@@ -36,6 +37,13 @@ def force_mono(signal: np.ndarray) -> np.ndarray:
     return signal
 
 
+def hz_to_midi(hz: np.ndarray) -> np.ndarray:
+    """
+    Converts from Hz to linear pitch space, where midi:69 = A440.
+    """
+    return np.maximum(0, 12 * np.log2((hz + EPS)/440) + 69)
+
+
 def load_data(path: str):
     assert os.path.isfile(path), 'Missing pickle. Run analysis.py'
 
@@ -55,6 +63,13 @@ def low_pass(
     Wn = frequency/(sample_rate / 2)
     [b, a] = butter(order, Wn, btype='lowpass')
     return filtfilt(b, a, signal)
+
+
+def midi_to_hz(midi: Union[float, int, np.ndarray]) -> Union[float, np.ndarray]:
+    """
+    Converts from linear pitch space to Hz, where A440 = midi:69.
+    """
+    return 440.0 * (2.0**((midi - 69.0) / 12.0))
 
 
 def normalize(x: np.ndarray) -> np.ndarray:

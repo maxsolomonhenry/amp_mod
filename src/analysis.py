@@ -1,3 +1,5 @@
+# TODO  - min/max per partials.
+
 import os
 import pyworld as pw
 
