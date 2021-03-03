@@ -27,8 +27,9 @@ slow vibrato. Parameters for all random stimuli are logged.
 """
 
 # TODO  - fade for modulations.
-#       - incorporate FM.
-#       - for fixed time rather than num_cycles.
+#       - FM
+#       - specify vibrato rates.
+#       - fixed time rather than num_cycles.
 
 import math
 import numpy as np
@@ -37,6 +38,110 @@ from analysis import single_cycles
 from defaults import SAMPLE_RATE, PITCH_RATE
 from util import midi_to_hz, normalize, upsample
 
+
+class StimulusGenerator:
+    """
+    Generate modulating tones from a cycle of spectral envelopes.
+    """
+    def __init__(self, sr: int = 44100, pr: int = 200):
+        assert sr > 0
+        self.sr = sr
+
+        assert pr > 0
+        self.pr = pr
+
+        self.f0 = None
+        self.fm_depth = None
+
+        self.env = None
+        self.num_partials = None
+
+        self.length = None
+        self.mod_rate = None
+        self.mod_hold = None
+        self.mod_fade = None
+
+    def __call__(
+            self,
+            f0: float,
+            fm_depth: float,
+            env: np.ndarray,
+            num_partials: int,
+            length: float,
+            mod_rate: float,
+            mod_hold: float,
+            mod_fade: float,
+    ) -> np.ndarray:
+
+        # Argument checking.
+        assert f0 > 0
+        self.f0 = f0
+
+        assert fm_depth >= 0
+        self.fm_depth = fm_depth
+
+        assert env.ndim == 2
+        self.env = env
+
+        assert num_partials > 0
+        assert (num_partials * f0) <= (self.sr // 2)
+        self.num_partials = num_partials
+
+        assert length > 0
+        self.length = length
+
+        assert 0 < mod_rate <= (self.pr // 2)
+        self.mod_rate = mod_rate
+
+        assert mod_hold >= 0
+        assert mod_fade >= 0
+        assert (mod_hold + mod_fade) <= length
+        self.mod_hold = mod_hold
+        self.mod_fade = mod_fade
+
+        x = self.synthesize()
+        return normalize(x)
+
+    def synthesize(self):
+        num_samples = self.length * self.sr
+        x = np.zeros(num_samples)
+
+        for k in np.arange(1, self.num_partials + 1):
+            x += self.make_partial(k)
+        return x
+
+    def make_partial(self, k):
+        frequency = k * self.f0
+        amp_envelope = self.make_amp_envelope(frequency)
+        carrier = self.make_carrier(frequency)
+        return amp_envelope * carrier
+
+    def make_amp_envelope(self, frequency):
+        # TODO
+        pass
+
+    def make_carrier(self, frequency):
+        t = np.arange(self.length)/self.sr
+
+        # Expects cycle that begins at top of cycle, i.e. cos(0).
+        mod = np.cos(2 * np.pi * self.mod_rate * t)
+        mod *= self.get_fm_coefficient()
+        mod *= self.get_depth_trajectory()
+        pass
+
+    def get_fm_coefficient(self):
+        """
+        Converts `fm_depth` into coefficient for IF trajectory.
+        """
+        # TODO
+        return 0.01
+
+    def get_depth_trajectory(self):
+        """
+        Path from 0 to 1 based on `hold` and `fade` times
+        """
+        # TODO
+        pass
 
 def make_partial(
     _frequency: float,
@@ -104,6 +209,7 @@ def get_fm_depth(_datum):
     min_ = np.min(_datum['f0'])
     return max_/min_
 
+
 # Synthesis parameters.
 num_cycles = 10
 num_harmonics = 70
@@ -116,14 +222,14 @@ synth_out = []
 for datum in single_cycles:
 
     fm_depth = get_fm_depth(datum)
-
     f0 = midi_to_hz(midi_pitch)
     assert f0 * num_harmonics <= (SAMPLE_RATE / 2), 'Partials over Nyquist.'
 
     # Bring to linear amplitude. Env is calculated as the power spectrum.
     env = np.sqrt(datum['env'])
 
-    x = synthesize(f0, env, num_cycles, num_harmonics)
+    generator = StimulusGenerator(sr=SAMPLE_RATE, pr=PITCH_RATE)
+    x = generator(f0, env, num_cycles, num_harmonics)
 
     synth_out.append(
         {
