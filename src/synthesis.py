@@ -36,7 +36,7 @@ import numpy as np
 
 from analysis import single_cycles
 from defaults import SAMPLE_RATE, PITCH_RATE
-from util import midi_to_hz, normalize, upsample
+from util import midi_to_hz, normalize, stft_plot, upsample
 
 
 class StimulusGenerator:
@@ -100,10 +100,10 @@ class StimulusGenerator:
         self.mod_fade = mod_fade
 
         x = self.synthesize()
-        return normalize(x)
+        return x
 
     def synthesize(self):
-        num_samples = self.length * self.sr
+        num_samples = int(self.length * self.sr)
         x = np.zeros(num_samples)
 
         for k in np.arange(1, self.num_partials + 1):
@@ -118,90 +118,107 @@ class StimulusGenerator:
 
     def make_amp_envelope(self, frequency):
         # TODO
-        pass
+        return 1.
 
     def make_carrier(self, frequency):
-        t = np.arange(self.length)/self.sr
+        t = np.arange(int(self.length * self.sr))/self.sr
 
         # Expects cycle that begins at top of cycle, i.e. cos(0).
-        mod = np.cos(2 * np.pi * self.mod_rate * t)
-        mod *= self.get_fm_coefficient()
-        mod *= self.get_depth_trajectory()
-        pass
+        trajectory = np.cos(2. * np.pi * self.mod_rate * t)
+
+        # Shape modulation.
+        trajectory *= self.get_fm_coefficient()
+        trajectory *= self.get_depth_trajectory()
+        trajectory += 1.
+
+        # Apply modulation.
+        trajectory *= frequency
+
+        phase = np.cumsum(2 * np.pi * trajectory / self.sr)
+        return np.cos(phase)
 
     def get_fm_coefficient(self):
         """
-        Converts `fm_depth` into coefficient for IF trajectory.
+        Converts `fm_depth` into coefficient for frequency trajectory.
         """
         # TODO
         return 0.01
 
     def get_depth_trajectory(self):
         """
-        Path from 0 to 1 based on `hold` and `fade` times
+        Path from 0 to 1 based on `mod_hold` and `mod_fade` times.
         """
-        # TODO
-        pass
 
-def make_partial(
-    _frequency: float,
-    _env: np.ndarray,
-    _num_cycles: int,
-) -> np.ndarray:
+        hold_samples = int(self.mod_hold * self.sr)
+        fade_samples = int(self.mod_fade * self.sr)
+        end_samples = int(self.length * self.sr - (hold_samples + fade_samples))
 
-    # Loop for desired number of vibrato cycles.
-    _env = np.tile(_env, [_num_cycles, 1])
+        hold = np.zeros(hold_samples)
+        fade = np.linspace(0, 1, fade_samples, endpoint=False)
+        end = np.ones(end_samples)
 
-    total_bins = _env.shape[1]
-    tmp_frames = _env.shape[0]
-    bin_num = _frequency / (SAMPLE_RATE // 2) * total_bins
-
-    tmp_samples = math.ceil(tmp_frames * SAMPLE_RATE / PITCH_RATE)
-
-    amp_envelope = np.zeros(tmp_samples)
-    bin_frac = bin_num % 1
-
-    # Read the partial's amplitude envelope based on the desired frequency.
-    if bin_frac == 0:
-        tmp_ = loop(_env[:, int(bin_num)])
-        amp_envelope += upsample(tmp_)
-    else:
-        # Linear interpolation for fractional bin values.
-        tmp_ = loop(_env[:, math.floor(bin_num)])
-        amp_envelope += (1 - bin_frac) * upsample(tmp_)
-
-        tmp_ = loop(_env[:, math.ceil(bin_num)])
-        amp_envelope += bin_frac * upsample(tmp_)
-
-    # TODO: possibly lp filter this.
-
-    carrier = make_carrier(_frequency, amp_envelope.shape[0])
-
-    return amp_envelope * carrier
+        return np.concatenate((hold, fade, end))
 
 
-def make_carrier(
-        frequency: float, length: int, sample_rate: int = SAMPLE_RATE
-) -> np.ndarray:
-    t = np.arange(length) / sample_rate
-    phi = 2 * np.pi * np.random.rand()
-    return np.cos(2 * np.pi * frequency * t + phi)
+# def make_partial(
+#     _frequency: float,
+#     _env: np.ndarray,
+#     _num_cycles: int,
+# ) -> np.ndarray:
+#
+#     # Loop for desired number of vibrato cycles.
+#     _env = np.tile(_env, [_num_cycles, 1])
+#
+#     total_bins = _env.shape[1]
+#     tmp_frames = _env.shape[0]
+#     bin_num = _frequency / (SAMPLE_RATE // 2) * total_bins
+#
+#     tmp_samples = math.ceil(tmp_frames * SAMPLE_RATE / PITCH_RATE)
+#
+#     amp_envelope = np.zeros(tmp_samples)
+#     bin_frac = bin_num % 1
+#
+#     # Read the partial's amplitude envelope based on the desired frequency.
+#     if bin_frac == 0:
+#         tmp_ = loop(_env[:, int(bin_num)])
+#         amp_envelope += upsample(tmp_)
+#     else:
+#         # Linear interpolation for fractional bin values.
+#         tmp_ = loop(_env[:, math.floor(bin_num)])
+#         amp_envelope += (1 - bin_frac) * upsample(tmp_)
+#
+#         tmp_ = loop(_env[:, math.ceil(bin_num)])
+#         amp_envelope += bin_frac * upsample(tmp_)
+#
+#     # TODO: possibly lp filter this.
+#
+#     carrier = make_carrier(_frequency, amp_envelope.shape[0])
+#
+#     return amp_envelope * carrier
+
+
+# def make_carrier(
+#         frequency: float, length: int, sample_rate: int = SAMPLE_RATE
+# ) -> np.ndarray:
+#     t = np.arange(length) / sample_rate
+#     phi = 2 * np.pi * np.random.rand()
+#     return np.cos(2 * np.pi * frequency * t + phi)
 
 
 def loop(in_: np.ndarray) -> np.ndarray:
     return np.concatenate([in_, [in_[0]]])
 
 
-def synthesize(_f0, _env, _num_cycles, _num_harmonics):
-    _num_frames = _num_cycles * _env.shape[0]
-    _num_samples = math.ceil(_num_frames * SAMPLE_RATE / PITCH_RATE)
-
-    x = np.zeros(_num_samples)
-
-    for k in np.arange(1, _num_harmonics):
-        x += make_partial(k*_f0, _env, _num_cycles)
-
-    return normalize(x)
+# def synthesize(_f0, _env, _num_cycles, _num_harmonics):
+#     _num_frames = _num_cycles * _env.shape[0]
+#     _num_samples = math.ceil(_num_frames * SAMPLE_RATE / PITCH_RATE)
+#
+#     x = np.zeros(_num_samples)
+#
+#     for k in np.arange(1, _num_harmonics):
+#         x += make_partial(k*_f0, _env, _num_cycles)
+#
+#     return normalize(x)
 
 
 def get_fm_depth(_datum):
@@ -212,7 +229,7 @@ def get_fm_depth(_datum):
 
 # Synthesis parameters.
 num_cycles = 10
-num_harmonics = 70
+num_partials = 70
 
 # Midi 48 -> C3.
 midi_pitch = 48
@@ -223,13 +240,23 @@ for datum in single_cycles:
 
     fm_depth = get_fm_depth(datum)
     f0 = midi_to_hz(midi_pitch)
-    assert f0 * num_harmonics <= (SAMPLE_RATE / 2), 'Partials over Nyquist.'
 
     # Bring to linear amplitude. Env is calculated as the power spectrum.
     env = np.sqrt(datum['env'])
 
     generator = StimulusGenerator(sr=SAMPLE_RATE, pr=PITCH_RATE)
-    x = generator(f0, env, num_cycles, num_harmonics)
+    x = generator(
+        f0=f0,
+        fm_depth=0.01,
+        env=env,
+        num_partials=70,
+        length=2.,
+        mod_rate=5.,
+        mod_hold=0.3,
+        mod_fade=0.7,
+    )
+
+    x = normalize(x)
 
     synth_out.append(
         {
@@ -239,3 +266,6 @@ for datum in single_cycles:
             'wav': x,
         }
     )
+
+    # Debugging.
+    stft_plot(x)
