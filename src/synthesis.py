@@ -166,6 +166,7 @@ class StimulusGenerator:
 
     def make_amp_envelope(self, frequency):
         # Lookup frequency in `env` array and return an amplitude envelope.
+        # TODO this
         # TODO possibly LP filter this to `self.frame_rate//2`
 
         return 1.
