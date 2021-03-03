@@ -26,11 +26,6 @@ speeds, 5 Hz reflecting typical vibrato, and 2 Hz, reflecting an unrealistically
 slow vibrato. Parameters for all random stimuli are logged.
 """
 
-# TODO  - fade for modulations.
-#       - FM
-#       - specify vibrato rates.
-#       - fixed time rather than num_cycles.
-
 import math
 import numpy as np
 
@@ -141,11 +136,32 @@ class StimulusGenerator:
         # Wrap-around first value to extend interpolation.
         tmp_env = self.loop(tmp_env)
 
-        # Resample.
         tmp_env = self._resample(tmp_env)
+        tmp_env = self.apply_spectral_fade(tmp_env)
 
         # Truncate and reassign.
         self.env = tmp_env[:num_samples, :]
+
+    def apply_spectral_fade(self, tmp_env):
+        """
+        Fade in spectral modulation, taking the middle of the cycle as neutral.
+        """
+        fade = self.get_depth_trajectory()
+
+        # Retrieve spectrum from middle of cycle.
+        mid_cycle_index = round(self.env.shape[0] // 2)
+        mid_env = self.env[mid_cycle_index, :]
+
+        # Fade out middle spectrum.
+        mid_env = np.outer((1 - fade), mid_env)
+
+        # Fade in spectral modulation.
+        tmp_env = tmp_env * fade[:, None]
+
+        # Cross-fade.
+        tmp_env += mid_env
+
+        return tmp_env
 
     def _resample(self, tmp_env):
         return resample(tmp_env, self.frame_rate, self.sr)
@@ -165,8 +181,7 @@ class StimulusGenerator:
         return amp_envelope * carrier
 
     def make_amp_envelope(self, frequency):
-        # Lookup frequency in `env` array and return an amplitude envelope.
-
+        # Find the (possibly fractional) bin corresponding to `frequency`.
         bin_num = frequency / (SAMPLE_RATE // 2) * self.env.shape[1]
         bin_fraction = bin_num % 1
 
@@ -230,67 +245,6 @@ class StimulusGenerator:
     @staticmethod
     def loop(in_: np.ndarray) -> np.ndarray:
         return np.concatenate([in_, [in_[0]]])
-
-
-# def make_partial(
-#     _frequency: float,
-#     _env: np.ndarray,
-#     _num_cycles: int,
-# ) -> np.ndarray:
-#
-#     # Loop for desired number of vibrato cycles.
-#     _env = np.tile(_env, [_num_cycles, 1])
-#
-#     total_bins = _env.shape[1]
-#     tmp_frames = _env.shape[0]
-#     bin_num = _frequency / (SAMPLE_RATE // 2) * total_bins
-#
-#     tmp_samples = math.ceil(tmp_frames * SAMPLE_RATE / PITCH_RATE)
-#
-#     amp_envelope = np.zeros(tmp_samples)
-#     bin_frac = bin_num % 1
-#
-#     # Read the partial's amplitude envelope based on the desired frequency.
-#     if bin_frac == 0:
-#         tmp_ = loop(_env[:, int(bin_num)])
-#         amp_envelope += upsample(tmp_)
-#     else:
-#         # Linear interpolation for fractional bin values.
-#         tmp_ = loop(_env[:, math.floor(bin_num)])
-#         amp_envelope += (1 - bin_frac) * upsample(tmp_)
-#
-#         tmp_ = loop(_env[:, math.ceil(bin_num)])
-#         amp_envelope += bin_frac * upsample(tmp_)
-#
-#     # TODO: possibly lp filter this.
-#
-#     carrier = make_carrier(_frequency, amp_envelope.shape[0])
-#
-#     return amp_envelope * carrier
-
-
-# def make_carrier(
-#         frequency: float, length: int, sample_rate: int = SAMPLE_RATE
-# ) -> np.ndarray:
-#     t = np.arange(length) / sample_rate
-#     phi = 2 * np.pi * np.random.rand()
-#     return np.cos(2 * np.pi * frequency * t + phi)
-
-
-def loop(in_: np.ndarray) -> np.ndarray:
-    return np.concatenate([in_, [in_[0]]])
-
-
-# def synthesize(_f0, _env, _num_cycles, _num_harmonics):
-#     _num_frames = _num_cycles * _env.shape[0]
-#     _num_samples = math.ceil(_num_frames * SAMPLE_RATE / PITCH_RATE)
-#
-#     x = np.zeros(_num_samples)
-#
-#     for k in np.arange(1, _num_harmonics):
-#         x += make_partial(k*_f0, _env, _num_cycles)
-#
-#     return normalize(x)
 
 
 def get_fm_depth(_datum):
