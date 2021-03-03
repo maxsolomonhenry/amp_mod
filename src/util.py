@@ -85,6 +85,24 @@ def read_wav(path: str):
     return sample_rate, x
 
 
+def resample(
+        env: np.ndarray,
+        frame_rate: float,
+        sr: int,
+) -> np.ndarray:
+    """
+    Resample spectral envelope array in time.
+    """
+    _indices = np.arange(env.shape[0]) * sr / frame_rate
+    f = interp1d(_indices, env, kind='linear', axis=0)
+
+    num_samples = int(
+        round((env.shape[0] - 1) * sr / frame_rate)
+    )
+
+    return f(np.arange(num_samples))
+
+
 def save_data(path: str, data, force: bool = False):
     if force is False:
         assert not os.path.isfile(path), 'File {} already exists.'.format(

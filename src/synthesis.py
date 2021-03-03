@@ -36,7 +36,7 @@ import numpy as np
 
 from analysis import single_cycles
 from defaults import SAMPLE_RATE, PITCH_RATE
-from util import midi_to_hz, normalize, stft_plot, upsample
+from util import midi_to_hz, normalize, stft_plot, resample
 
 
 class StimulusGenerator:
@@ -61,6 +61,8 @@ class StimulusGenerator:
         self.mod_hold = None
         self.mod_fade = None
 
+        self.frame_rate = None
+
     def __call__(
             self,
             f0: float,
@@ -72,6 +74,21 @@ class StimulusGenerator:
             mod_hold: float,
             mod_fade: float,
     ) -> np.ndarray:
+        """Generate a spectral- and frequency- modulated tone.
+
+        Args:
+            f0: Fundamental pitch of the output, in Hz.
+            fm_depth: Depth of pitch modulation, in semitones.
+            env: Array of spectral envelopes (time x real frequency).
+            num_partials: Number of partials for resynthesis.
+            length: Synthesis length in seconds.
+            mod_rate: Rate of spectral- and frequency- modulation, in Hz.
+            mod_hold: Time before applying modulation, in seconds.
+            mod_fade: Time to ramp modulation (from 0 to 1), in seconds.
+
+        Returns:
+            Numpy array. A normalized, one-dimensional, audio rate stimulus.
+        """
 
         # Argument checking.
         assert f0 > 0
@@ -99,19 +116,42 @@ class StimulusGenerator:
         self.mod_hold = mod_hold
         self.mod_fade = mod_fade
 
+        # Preliminary calculations.
+        num_frames = env.shape[0]
+        self.frame_rate = num_frames * self.mod_rate
+
         # Pre-processing.
-        self.resample_env()
+        self.process_env()
 
         # Output.
         x = self.synthesize()
+        x = normalize(x)
         return x
 
-    def resample_env(self):
-        # TODO
-        pass
+    def process_env(self):
+
+        # Preliminaries.
+        num_samples = self.get_num_samples()
+        num_cycles = math.ceil(self.length * self.mod_rate)
+
+        # Extend in time.
+        tmp_env = self.env
+        tmp_env = np.tile(tmp_env, [num_cycles, 1])
+
+        # Wrap-around first value to extend interpolation.
+        tmp_env = self.loop(tmp_env)
+
+        # Resample.
+        tmp_env = self._resample(tmp_env)
+
+        # Truncate and reassign.
+        self.env = tmp_env[:num_samples, :]
+
+    def _resample(self, tmp_env):
+        return resample(tmp_env, self.frame_rate, self.sr)
 
     def synthesize(self):
-        num_samples = int(self.length * self.sr)
+        num_samples = self.get_num_samples()
         x = np.zeros(num_samples)
 
         for k in np.arange(1, self.num_partials + 1):
@@ -125,13 +165,15 @@ class StimulusGenerator:
         return amp_envelope * carrier
 
     def make_amp_envelope(self, frequency):
-        # TODO
+        # Lookup frequency in `env` array and return an amplitude envelope.
+        # TODO possibly LP filter this to `self.frame_rate//2`
+
         return 1.
 
     def make_carrier(self, frequency):
         t = np.arange(int(self.length * self.sr))/self.sr
 
-        # Expects cycle that begins at top of cycle, i.e. cos(0).
+        # Always begins at top of cycle (i.e. cos(0)), as per analysis.py.
         trajectory = np.cos(2. * np.pi * self.mod_rate * t)
 
         # Shape modulation.
@@ -166,6 +208,13 @@ class StimulusGenerator:
         end = np.ones(end_samples)
 
         return np.concatenate((hold, fade, end))
+
+    def get_num_samples(self):
+        return int(self.length * self.sr)
+
+    @staticmethod
+    def loop(in_: np.ndarray) -> np.ndarray:
+        return np.concatenate([in_, [in_[0]]])
 
 
 # def make_partial(
@@ -236,7 +285,6 @@ def get_fm_depth(_datum):
 
 
 # Synthesis parameters.
-num_cycles = 10
 num_partials = 70
 
 # Midi 48 -> C3.
@@ -270,7 +318,6 @@ for datum in single_cycles:
         {
             'filename': datum['filename'],
             'f0': f0,
-            'num_cycles': num_cycles,
             'wav': x,
         }
     )
