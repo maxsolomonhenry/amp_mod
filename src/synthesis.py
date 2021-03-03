@@ -99,8 +99,16 @@ class StimulusGenerator:
         self.mod_hold = mod_hold
         self.mod_fade = mod_fade
 
+        # Pre-processing.
+        self.resample_env()
+
+        # Output.
         x = self.synthesize()
         return x
+
+    def resample_env(self):
+        # TODO
+        pass
 
     def synthesize(self):
         num_samples = int(self.length * self.sr)
