@@ -166,10 +166,24 @@ class StimulusGenerator:
 
     def make_amp_envelope(self, frequency):
         # Lookup frequency in `env` array and return an amplitude envelope.
-        # TODO this
+
+        bin_num = frequency / (SAMPLE_RATE // 2) * self.env.shape[1]
+        bin_fraction = bin_num % 1
+
+        num_samples = self.get_num_samples()
+        amp_envelope = np.zeros(num_samples)
+
+        # Read amplitude envelope based on the desired frequency.
+        if bin_fraction == 0:
+            amp_envelope += self.env[:, bin_num]
+        else:
+            # Linear interpolation between adjacent bins.
+            amp_envelope += (1 - bin_fraction) * self.env[:, math.floor(bin_num)]
+            amp_envelope += bin_fraction * self.env[:, math.ceil(bin_num)]
+
         # TODO possibly LP filter this to `self.frame_rate//2`
 
-        return 1.
+        return amp_envelope
 
     def make_carrier(self, frequency):
         t = np.arange(int(self.length * self.sr))/self.sr
