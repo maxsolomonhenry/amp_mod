@@ -17,7 +17,7 @@ from util import (
 )
 
 # Flags.
-VERBOSE = True
+VERBOSE = False
 
 # Analysis parameters.
 excerpt_in = 0.75

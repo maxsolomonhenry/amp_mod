@@ -29,7 +29,6 @@ slow vibrato. Parameters for all random stimuli are logged.
 import math
 import numpy as np
 
-from analysis import single_cycles
 from defaults import SAMPLE_RATE, PITCH_RATE
 from util import midi_to_hz, normalize, stft_plot, resample
 
@@ -129,18 +128,20 @@ class StimulusGenerator:
         num_samples = self.get_num_samples()
         num_cycles = math.ceil(self.length * self.mod_rate)
 
-        # Extend in time.
+        # Extend in time to desired output length.
         tmp_env = self.env
         tmp_env = np.tile(tmp_env, [num_cycles, 1])
 
         # Wrap-around first value to extend interpolation.
         tmp_env = self.loop(tmp_env)
 
+        # Resample and truncate.
         tmp_env = self._resample(tmp_env)
+        tmp_env = tmp_env[:num_samples, :]
+
         tmp_env = self.apply_spectral_fade(tmp_env)
 
-        # Truncate and reassign.
-        self.env = tmp_env[:num_samples, :]
+        self.env = tmp_env
 
     def apply_spectral_fade(self, tmp_env):
         """
@@ -219,10 +220,16 @@ class StimulusGenerator:
 
     def get_fm_coefficient(self):
         """
-        Converts `fm_depth` into coefficient for frequency trajectory.
+        Converts `fm_depth` from semitones into coefficient for frequency.
+
+        Note: strictly speaking, pitch modulation should be applied in
+        log-space, because pitch scales logarithmically with frequency. Here, we
+        apply modulation on a linear scale. Tsk tsk. For the small modulation
+        excursions associated with typical vibrato, the difference is quite
+        minimal, and arguably imperceptible. Though that, *sigh*, would be
+        another experiment. And we all love those.
         """
-        # TODO
-        return 0.01
+        return 2 ** (self.fm_depth / 12) - 1
 
     def get_depth_trajectory(self):
         """
@@ -247,49 +254,100 @@ class StimulusGenerator:
         return np.concatenate([in_, [in_[0]]])
 
 
-def get_fm_depth(_datum):
-    max_ = np.max(_datum['f0'])
-    min_ = np.min(_datum['f0'])
-    return max_/min_
+class EnvelopeMorpher:
+    """
+    Generate variations of spectral modulation based on a prototype cycle.
+    """
+    # TODO: log morphs/stats.
+    def __init__(self, env: np.ndarray):
+        assert env.ndim == 2
+        self.env = env
+
+    def shuffle_phase(self, num_shifts: int = 4):
+        all_shifts = np.linspace(0, 1, num_shifts, endpoint=False)
+        num_frames, num_bins = self.env.shape
+
+        for k in np.arange(num_bins):
+            shift = np.random.choice(all_shifts)
+
+            tmp = self.env[:, k]
+            tmp = self.roll(tmp, shift)
+
+            self.env[:, k] = tmp
+
+    def __call__(self):
+        return self.env
+
+    @staticmethod
+    def roll(in_, shift):
+        """
+        Circular shift array using linear interpolation, where 0 <= `shift` < 1
+        """
+        num_samples = in_.size
+        shift_samples = num_samples * shift
+        shift_fraction = shift_samples % 1
+
+        out_ = np.zeros(num_samples)
+
+        if shift_samples == 0:
+            out_ += in_
+        elif shift_fraction == 0:
+            out_ += np.roll(in_, shift_samples)
+        else:
+            out_ += (1 - shift_fraction) * np.roll(in_, math.floor(shift_samples))
+            out_ += shift_fraction * np.roll(in_, math.ceil(shift_samples))
+
+        return out_
 
 
-# Synthesis parameters.
-num_partials = 70
+if __name__ == '__main__':
+    from analysis import single_cycles
 
-# Midi 48 -> C3.
-midi_pitch = 48
+    # Helper.
+    def get_fm_depth(_datum):
+        """
+        FM depth in semitones, calculated from middle to extrema of pitch.
+        """
+        max_ = np.max(_datum['f0'])
+        min_ = np.min(_datum['f0'])
+        return 12 * np.log2(max_/min_) / 2
 
-synth_out = []
+    # Synthesis parameters.
+    num_partials = 70
 
-for datum in single_cycles:
+    # Midi 48 -> C3.
+    midi_pitch = 48
 
-    fm_depth = get_fm_depth(datum)
-    f0 = midi_to_hz(midi_pitch)
+    synth_out = []
 
-    # Bring to linear amplitude. Env is calculated as the power spectrum.
-    env = np.sqrt(datum['env'])
+    for datum in single_cycles:
+        fm_depth = get_fm_depth(datum)
+        f0 = midi_to_hz(midi_pitch)
 
-    generator = StimulusGenerator(sr=SAMPLE_RATE, pr=PITCH_RATE)
-    x = generator(
-        f0=f0,
-        fm_depth=0.01,
-        env=env,
-        num_partials=70,
-        length=2.,
-        mod_rate=5.,
-        mod_hold=0.3,
-        mod_fade=0.7,
-    )
+        # Bring to linear amplitude. Env is calculated as the power spectrum.
+        env_ = np.sqrt(datum['env'])
 
-    x = normalize(x)
+        morpher = EnvelopeMorpher(env_)
+        morpher.shuffle_phase(num_shifts=4)
 
-    synth_out.append(
-        {
-            'filename': datum['filename'],
-            'f0': f0,
-            'wav': x,
-        }
-    )
+        generator = StimulusGenerator(sr=SAMPLE_RATE, pr=PITCH_RATE)
+        x = generator(
+            f0=f0,
+            fm_depth=0.0,
+            env=morpher(),
+            num_partials=70,
+            length=2.1,
+            mod_rate=5.,
+            mod_hold=0.3,
+            mod_fade=0.7,
+        )
 
-    # Debugging.
-    stft_plot(x)
+        stft_plot(x)
+
+        synth_out.append(
+            {
+                'filename': datum['filename'],
+                'f0': f0,
+                'wav': x,
+            }
+        )
