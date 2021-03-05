@@ -50,7 +50,6 @@ for path in audio_files:
 
     if VERBOSE:
         print('WORLD analysis...')
-    # f0, sp, ap = pw.wav2world(x, sr, pitch_period_ms)
 
     _f0, t = pw.dio(x, sr, frame_period=pitch_period_ms)
     f0 = pw.stonemask(x, _f0, t, sr)

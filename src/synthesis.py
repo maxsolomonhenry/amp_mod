@@ -4,7 +4,9 @@ resonant structure of the instrument, as described by Mathews and others
 (Mathews and Kohut, 1973), and serves as a positive control.
 
 A FROZEN condition keeps the complex AM of a plausible resonant structure, but
-contains no FM. In a random AM phase (RAP) condition, each partial is amplitude
+contains no FM.
+
+In a random AM phase (RAP) condition, each partial is amplitude
 modulated at the vibrato rate, having a random gain between 0 and 10 dB, and
 with an initial modulation phase randomly selected as one of four values equal
 divisions of the oscillation: {0, π/2, π, 3π/2}.
@@ -26,6 +28,7 @@ speeds, 5 Hz reflecting typical vibrato, and 2 Hz, reflecting an unrealistically
 slow vibrato. Parameters for all random stimuli are logged.
 """
 
+from copy import copy
 import math
 import numpy as np
 
@@ -227,7 +230,7 @@ class StimulusGenerator:
         apply modulation on a linear scale. Tsk tsk. For the small modulation
         excursions associated with typical vibrato, the difference is quite
         minimal, and arguably imperceptible. Though that, *sigh*, would be
-        another experiment. And we all love those.
+        another experiment.
         """
         return 2 ** (self.fm_depth / 12) - 1
 
@@ -261,9 +264,13 @@ class EnvelopeMorpher:
     # TODO: log morphs/stats.
     def __init__(self, env: np.ndarray):
         assert env.ndim == 2
-        self.env = env
+        self.env = copy(env)
 
     def shuffle_phase(self, num_shifts: int = 4):
+        """
+        Randomly shuffle each column.
+        """
+
         all_shifts = np.linspace(0, 1, num_shifts, endpoint=False)
         num_frames, num_bins = self.env.shape
 

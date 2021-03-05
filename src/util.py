@@ -38,6 +38,12 @@ def force_mono(signal: np.ndarray) -> np.ndarray:
     return signal
 
 
+def get_amp_envelope(signal: np.ndarray, smoothing: int = 1024):
+    amplitude_envelope = np.abs(hilbert(signal))
+    smoothed = np.convolve(amplitude_envelope, np.ones(smoothing)/smoothing)
+    return smoothed
+
+
 def hz_to_midi(hz: np.ndarray) -> np.ndarray:
     """
     Converts from Hz to linear pitch space, where midi:69 = A440.
@@ -169,9 +175,8 @@ def trim_silence(
     """
     Trims beginning of audio signal until it passes a given threshold in dB.
     """
-    amplitude_envelope = np.abs(hilbert(signal))
-    smoothed = np.convolve(amplitude_envelope, np.ones(smoothing)/smoothing)
-    log_envelope = np.log(smoothed + EPS)
+    amp_envelope = get_amp_envelope(signal, smoothing)
+    log_envelope = np.log(amp_envelope + EPS)
     start_index = np.maximum(
         np.where(log_envelope >= threshold)[0][0] - smoothing//2,
         0
