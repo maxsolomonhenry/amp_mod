@@ -107,8 +107,13 @@ def resample(
     """
     Resample spectral envelope array in time.
     """
+
+    axis = -1
+    if env.ndim == 2:
+        axis = 0
+
     _indices = np.arange(env.shape[0]) * sr / frame_rate
-    f = interp1d(_indices, env, kind='linear', axis=0)
+    f = interp1d(_indices, env, kind='linear', axis=axis)
 
     num_samples = int(
         round((env.shape[0] - 1) * sr / frame_rate)

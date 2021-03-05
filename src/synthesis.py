@@ -40,12 +40,24 @@ class StimulusGenerator:
     """
     Generate modulating tones from a cycle of spectral envelopes.
     """
-    def __init__(self, sr: int = 44100, pr: int = 200):
+    def __init__(
+            self,
+            sr: int = 44100,
+            pr: int = 200,
+            random_rate_upper_limit = 12.,
+            random_rate_lower_limit = 4.,
+    ):
         assert sr > 0
         self.sr = sr
 
         assert pr > 0
         self.pr = pr
+
+        assert random_rate_upper_limit >= 0
+        self.random_rate_upper_limit = random_rate_upper_limit
+
+        assert random_rate_lower_limit <= random_rate_upper_limit
+        self.random_rate_lower_limit = random_rate_lower_limit
 
         self.f0 = None
         self.fm_depth = None
@@ -61,7 +73,6 @@ class StimulusGenerator:
         self.synth_mode = None
 
         self.processed_env = None
-        self.frame_rate = None
 
     def __call__(
             self,
@@ -88,8 +99,8 @@ class StimulusGenerator:
             mod_fade: Time to ramp modulation (from 0 to 1), in seconds.
             synth_mode: Synthesis type ->
                 'default' is normal behaviour.
-                'PAM' is the Pure Amplitude Modulation condition (tremolo).
-                'RAF' is the Random Amplitude modulation Frequency condition.
+                'pam' is the Pure Amplitude Modulation condition (tremolo).
+                'raf' is the Random Amplitude modulation Frequency condition.
 
         Returns:
             Numpy array. A normalized, one-dimensional, audio rate stimulus.
@@ -121,12 +132,8 @@ class StimulusGenerator:
         self.mod_hold = mod_hold
         self.mod_fade = mod_fade
 
-        assert synth_mode in ['default', 'PAM', 'RAF']
+        assert synth_mode in ['default', 'pam', 'raf']
         self.synth_mode = synth_mode
-
-        # Preliminary calculations.
-        num_frames = env.shape[0]
-        self.frame_rate = num_frames * self.mod_rate
 
         # Resample, loop and extend spectral envelope.
         self.process_env()
@@ -138,9 +145,50 @@ class StimulusGenerator:
 
     def process_env(self):
 
-        # Preliminaries.
+        if self.synth_mode == 'raf':
+            tmp_env = self.get_raf_env()
+        else:
+            tmp_env = self.cycle_and_resample_env()
+
+        tmp_env = self.apply_spectral_fade(tmp_env)
+
+        self.processed_env = tmp_env
+
+    def get_raf_env(self):
+        """
+        Generate envelope with each partial amp-modulated at a different rate.
+        """
+        num_frames, num_bins = self.env.shape
+        basic_frame_rate = num_frames * self.mod_rate
+
         num_samples = self.get_num_samples()
+        tmp_env = np.zeros(num_samples, num_bins)
+
+        for i in range(num_bins):
+            random_rate = self.get_random_rate()
+
+            # TODO
+            # Pick vibrato hz.
+            # Find equivalent framerate.
+            # Loop.
+            # Resample.
+            # Truncate.
+            # Place in processed_ev
+
+        return tmp_env
+
+    def get_random_rate(self):
+        upper = self.random_rate_upper_limit
+        lower = self.random_rate_lower_limit
+        x = np.random.rand()
+        return (upper - lower + 1.)**x + lower - 1.
+
+    def cycle_and_resample_env(self):
+
+        # Preliminaries.
+        num_frames = self.env.shape[0]
         num_cycles = math.ceil(self.length * self.mod_rate)
+        num_samples = self.get_num_samples()
 
         # Extend in time to desired output length.
         tmp_env = copy(self.env)
@@ -149,13 +197,14 @@ class StimulusGenerator:
         # Wrap-around first value to extend interpolation.
         tmp_env = self.loop(tmp_env)
 
-        # Resample and truncate.
-        tmp_env = self._resample(tmp_env)
+        # Resample.
+        frame_rate = num_frames * self.mod_rate
+        tmp_env = self._resample(tmp_env, frame_rate)
+
+        # Truncate.
         tmp_env = tmp_env[:num_samples, :]
 
-        tmp_env = self.apply_spectral_fade(tmp_env)
-
-        self.processed_env = tmp_env
+        return tmp_env
 
     def apply_spectral_fade(self, tmp_env):
         """
@@ -178,23 +227,22 @@ class StimulusGenerator:
 
         return tmp_env
 
-    def _resample(self, tmp_env):
-        return resample(tmp_env, self.frame_rate, self.sr)
+    def _resample(self, tmp_env, frame_rate):
+        return resample(tmp_env, frame_rate, self.sr)
 
     def synthesize(self):
         num_samples = self.get_num_samples()
         x = np.zeros(num_samples)
 
-        if self.synth_mode == 'PAM':
+        if self.synth_mode == 'default' or self.synth_mode == 'raf':
+            x = self.standard_synthesis(x)
+        elif self.synth_mode == 'pam':
             x = self.pam_synthesis(x)
-        elif self.synth_mode == 'RAF':
-            x = self.raf_synthesis(x)
         else:
-            assert self.synth_mode == 'default', 'Unrecognized synthesis mode.'
-            x = self.default_synthesis(x)
+            raise ValueError("Unknown mode: {}.".format(self.synth_mode))
         return x
 
-    def default_synthesis(self, x):
+    def standard_synthesis(self, x):
         for k in np.arange(1, self.num_partials + 1):
             x += self.make_partial(k)
         return x
@@ -216,15 +264,11 @@ class StimulusGenerator:
         for k in np.arange(1, self.num_partials + 1):
             frequency = k * self.f0
             gain = self.gain_lookup(average_spectrum, frequency)
+
             x += gain * amp_envelope * self.make_carrier(frequency)
 
         # TODO have a closer look at this output.
-
         return x
-
-    def raf_synthesis(self, x):
-        # TODO
-        pass
 
     def gain_lookup(self, spectrum, frequency):
         gain = 0
@@ -339,6 +383,8 @@ class EnvelopeMorpher:
         """
         Randomly shuffle each column.
         """
+
+        assert num_shifts > 0
 
         all_shifts = np.linspace(0, 1, num_shifts, endpoint=False)
         num_frames, num_bins = self.env.shape
