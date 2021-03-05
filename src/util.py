@@ -18,6 +18,10 @@ from typing import Union
 from defaults import EPS, PITCH_RATE, SAMPLE_RATE
 
 
+def contains_nan(in_: np.ndarray) -> bool:
+    return np.isnan(np.sum(in_))
+
+
 def flatten(signal: np.ndarray) -> np.ndarray:
     """
     Replace an array values with its mean.
@@ -38,9 +42,9 @@ def force_mono(signal: np.ndarray) -> np.ndarray:
     return signal
 
 
-def get_amp_envelope(signal: np.ndarray, smoothing: int = 1024):
+def get_amp_envelope(signal: np.ndarray, cutoff: float = 25., sr: int = 44100):
     amplitude_envelope = np.abs(hilbert(signal))
-    smoothed = np.convolve(amplitude_envelope, np.ones(smoothing)/smoothing)
+    smoothed = low_pass(amplitude_envelope, cutoff, sample_rate=sr, order=4)
     return smoothed
 
 
@@ -69,7 +73,11 @@ def low_pass(
     """
     Wn = frequency/(sample_rate / 2)
     [b, a] = butter(order, Wn, btype='lowpass')
-    return filtfilt(b, a, signal)
+
+    out_ = filtfilt(b, a, signal)
+    assert not contains_nan(out_), "Filtering generated NaNs."
+
+    return out_
 
 
 def midi_to_hz(midi: Union[float, int, np.ndarray]) -> Union[float, np.ndarray]:
@@ -170,15 +178,16 @@ def trim_to_duration(
 def trim_silence(
     signal: np.ndarray,
     threshold: float = -35,
-    smoothing: int = 1024
+    cutoff: float = 25.,
+    sr: int = 44100,
 ) -> np.ndarray:
     """
     Trims beginning of audio signal until it passes a given threshold in dB.
     """
-    amp_envelope = get_amp_envelope(signal, smoothing)
+    amp_envelope = get_amp_envelope(signal, cutoff, sr)
     log_envelope = np.log(amp_envelope + EPS)
     start_index = np.maximum(
-        np.where(log_envelope >= threshold)[0][0] - smoothing//2,
+        np.where(log_envelope >= threshold)[0][0],
         0
     )
     return signal[start_index:]

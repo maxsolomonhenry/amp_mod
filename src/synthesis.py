@@ -58,6 +58,9 @@ class StimulusGenerator:
         self.mod_hold = None
         self.mod_fade = None
 
+        self.synth_mode = None
+
+        self.processed_env = None
         self.frame_rate = None
 
     def __call__(
@@ -70,6 +73,7 @@ class StimulusGenerator:
             mod_rate: float,
             mod_hold: float,
             mod_fade: float,
+            synth_mode: str = 'default',
     ) -> np.ndarray:
         """Generate a spectral- and frequency- modulated tone.
 
@@ -82,6 +86,10 @@ class StimulusGenerator:
             mod_rate: Rate of spectral- and frequency- modulation, in Hz.
             mod_hold: Time before applying modulation, in seconds.
             mod_fade: Time to ramp modulation (from 0 to 1), in seconds.
+            synth_mode: Synthesis type ->
+                'default' is normal behaviour.
+                'PAM' is the Pure Amplitude Modulation condition (tremolo).
+                'RAF' is the Random Amplitude modulation Frequency condition.
 
         Returns:
             Numpy array. A normalized, one-dimensional, audio rate stimulus.
@@ -113,11 +121,14 @@ class StimulusGenerator:
         self.mod_hold = mod_hold
         self.mod_fade = mod_fade
 
+        assert synth_mode in ['default', 'PAM', 'RAF']
+        self.synth_mode = synth_mode
+
         # Preliminary calculations.
         num_frames = env.shape[0]
         self.frame_rate = num_frames * self.mod_rate
 
-        # Pre-processing.
+        # Resample, loop and extend spectral envelope.
         self.process_env()
 
         # Output.
@@ -132,7 +143,7 @@ class StimulusGenerator:
         num_cycles = math.ceil(self.length * self.mod_rate)
 
         # Extend in time to desired output length.
-        tmp_env = self.env
+        tmp_env = copy(self.env)
         tmp_env = np.tile(tmp_env, [num_cycles, 1])
 
         # Wrap-around first value to extend interpolation.
@@ -144,7 +155,7 @@ class StimulusGenerator:
 
         tmp_env = self.apply_spectral_fade(tmp_env)
 
-        self.env = tmp_env
+        self.processed_env = tmp_env
 
     def apply_spectral_fade(self, tmp_env):
         """
@@ -174,9 +185,61 @@ class StimulusGenerator:
         num_samples = self.get_num_samples()
         x = np.zeros(num_samples)
 
+        if self.synth_mode == 'PAM':
+            x = self.pam_synthesis(x)
+        elif self.synth_mode == 'RAF':
+            x = self.raf_synthesis(x)
+        else:
+            assert self.synth_mode == 'default', 'Unrecognized synthesis mode.'
+            x = self.default_synthesis(x)
+        return x
+
+    def default_synthesis(self, x):
         for k in np.arange(1, self.num_partials + 1):
             x += self.make_partial(k)
         return x
+
+    def pam_synthesis(self, x):
+        """
+        Returns a stimulus with a static spectral envelope, but having a global
+        amplitude envelope of an equivalent spectrum-modulated signal.
+        """
+        amp_envelope = np.empty_like(x)
+        average_spectrum = np.mean(self.env, axis=0)
+
+        # Lookup and sum all partial amplitudes into one master envelope.
+        for k in np.arange(1, self.num_partials + 1):
+            frequency = k * self.f0
+            amp_envelope += self.make_amp_envelope(frequency)
+
+        # Apply master envelope to each partial, scaling partials to average.
+        for k in np.arange(1, self.num_partials + 1):
+            frequency = k * self.f0
+            gain = self.gain_lookup(average_spectrum, frequency)
+            x += gain * amp_envelope * self.make_carrier(frequency)
+
+        # TODO have a closer look at this output.
+
+        return x
+
+    def raf_synthesis(self, x):
+        # TODO
+        pass
+
+    def gain_lookup(self, spectrum, frequency):
+        gain = 0
+
+        bin_num = self.get_bin_num(frequency)
+        bin_fraction = bin_num % 1.
+
+        # Linearly interpolate if necessary.
+        if bin_fraction == 0:
+            gain = spectrum[bin_num]
+        else:
+            gain += (1 - bin_fraction) * spectrum[math.floor(bin_num)]
+            gain += bin_fraction * spectrum[math.ceil(bin_num)]
+
+        return gain
 
     def make_partial(self, k):
         frequency = k * self.f0
@@ -186,7 +249,7 @@ class StimulusGenerator:
 
     def make_amp_envelope(self, frequency):
         # Find the (possibly fractional) bin corresponding to `frequency`.
-        bin_num = frequency / (SAMPLE_RATE // 2) * self.env.shape[1]
+        bin_num = self.get_bin_num(frequency)
         bin_fraction = bin_num % 1
 
         num_samples = self.get_num_samples()
@@ -194,15 +257,18 @@ class StimulusGenerator:
 
         # Read amplitude envelope based on the desired frequency.
         if bin_fraction == 0:
-            amp_envelope += self.env[:, bin_num]
+            amp_envelope += self.processed_env[:, bin_num]
         else:
             # Linear interpolation between adjacent bins.
-            amp_envelope += (1 - bin_fraction) * self.env[:, math.floor(bin_num)]
-            amp_envelope += bin_fraction * self.env[:, math.ceil(bin_num)]
+            amp_envelope += (1 - bin_fraction) * self.processed_env[:, math.floor(bin_num)]
+            amp_envelope += bin_fraction * self.processed_env[:, math.ceil(bin_num)]
 
         # TODO possibly LP filter this to `self.frame_rate//2`
 
         return amp_envelope
+
+    def get_bin_num(self, frequency):
+        return frequency / (self.sr // 2) * self.env.shape[1]
 
     def make_carrier(self, frequency):
         t = np.arange(int(self.length * self.sr))/self.sr
@@ -218,7 +284,10 @@ class StimulusGenerator:
         # Apply modulation.
         trajectory *= frequency
 
-        phase = np.cumsum(2 * np.pi * trajectory / self.sr)
+        # Randomize initial phase.
+        phi = 2 * np.pi * np.random.rand()
+
+        phase = np.cumsum(2 * np.pi * trajectory / self.sr) + phi
         return np.cos(phase)
 
     def get_fm_coefficient(self):
@@ -236,7 +305,7 @@ class StimulusGenerator:
 
     def get_depth_trajectory(self):
         """
-        Path from 0 to 1 based on `mod_hold` and `mod_fade` times.
+        Modulation depth from 0 to 1 based on `mod_hold` and `mod_fade` times.
         """
 
         hold_samples = int(self.mod_hold * self.sr)
@@ -313,7 +382,7 @@ if __name__ == '__main__':
     # Helper.
     def get_fm_depth(_datum):
         """
-        FM depth in semitones, calculated from middle to extrema of pitch.
+        FM depth in semitones, calculated as half the difference of pitch.
         """
         max_ = np.max(_datum['f0'])
         min_ = np.min(_datum['f0'])
