@@ -42,8 +42,8 @@ class StimulusGenerator:
     """
     def __init__(
             self,
-            sr: int = 44100,
-            pr: int = 200,
+            sr: int = SAMPLE_RATE,
+            pr: int = PITCH_RATE,
             random_rate_upper_limit = 12.,
             random_rate_lower_limit = 4.,
     ):
@@ -375,7 +375,7 @@ class EnvelopeMorpher:
     Generate variations of spectral modulation based on a prototype cycle.
     """
     # TODO: log morphs/stats.
-    def __init__(self, env: np.ndarray):
+    def __init__(self, env: np.ndarray, pr: int = PITCH_RATE):
         assert env.ndim == 2
         self.env = copy(env)
 
@@ -396,6 +396,13 @@ class EnvelopeMorpher:
             tmp = self.roll(tmp, shift)
 
             self.env[:, k] = tmp
+
+    def low_pass(self, cutoff:float = 25.):
+        """
+        Low-pass filter all partials.
+        """
+        # TODO
+        pass
 
     def __call__(self):
         return self.env
