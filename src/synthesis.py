@@ -159,21 +159,21 @@ class StimulusGenerator:
         Generate envelope with each partial amp-modulated at a different rate.
         """
         num_frames, num_bins = self.env.shape
-        basic_frame_rate = num_frames * self.mod_rate
 
         num_samples = self.get_num_samples()
-        tmp_env = np.zeros(num_samples, num_bins)
+        tmp_env = np.zeros([num_samples, num_bins])
 
         for i in range(num_bins):
             random_rate = self.get_random_rate()
 
-            # TODO
-            # Pick vibrato hz.
-            # Find equivalent framerate.
-            # Loop.
-            # Resample.
-            # Truncate.
-            # Place in processed_ev
+            num_cycles = math.ceil(self.length * random_rate)
+            frame_rate = num_frames * random_rate
+
+            tmp = np.tile(self.env[:, i], num_cycles)
+            tmp = self.loop(tmp)
+            tmp = self._resample(tmp, frame_rate)
+
+            tmp_env[:, i] = tmp[:num_samples]
 
         return tmp_env
 
