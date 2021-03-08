@@ -18,6 +18,36 @@ from typing import Union
 from defaults import EPS, PITCH_RATE, SAMPLE_RATE
 
 
+def add_fade(
+    signal: np.ndarray,
+    fade_length: float,
+    rate: int,
+    f_out: bool = False,
+):
+    """
+    Adds linear fade in/out to signal.
+    """
+
+    num_samples = int(fade_length * rate)
+
+    # Build ramp.
+    ramp = np.linspace(0, 1, num_samples, endpoint=False)
+
+    mean = np.mean(signal)
+    signal -= mean
+
+    # Fade in/out.
+
+    if f_out:
+        signal[-num_samples:] *= ramp[::-1]
+    else:
+        signal[:num_samples] *= ramp
+
+    signal += mean
+
+    return signal
+
+
 def contains_nan(in_: np.ndarray) -> bool:
     return np.isnan(np.sum(in_))
 

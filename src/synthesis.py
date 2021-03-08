@@ -33,7 +33,9 @@ import math
 import numpy as np
 
 from defaults import SAMPLE_RATE, PITCH_RATE
-from util import midi_to_hz, normalize, plot_envelope, stft_plot, resample
+from util import (
+    add_fade, midi_to_hz, normalize, plot_envelope, stft_plot, resample
+)
 
 
 class StimulusGenerator:
@@ -44,8 +46,8 @@ class StimulusGenerator:
             self,
             sr: int = SAMPLE_RATE,
             pr: int = PITCH_RATE,
-            random_rate_upper_limit = 12.,
-            random_rate_lower_limit = 4.,
+            random_rate_upper_limit: float = 12.,
+            random_rate_lower_limit: float = 4.,
     ):
         assert sr > 0
         self.sr = sr
@@ -71,6 +73,7 @@ class StimulusGenerator:
         self.mod_fade = None
 
         self.synth_mode = None
+        self.audio_fade = None
 
         self.processed_env = None
 
@@ -85,6 +88,7 @@ class StimulusGenerator:
             mod_hold: float,
             mod_fade: float,
             synth_mode: str = 'default',
+            audio_fade: float = 0.01,
     ) -> np.ndarray:
         """Generate a spectral- and frequency- modulated tone.
 
@@ -135,12 +139,15 @@ class StimulusGenerator:
         assert synth_mode in ['default', 'pam', 'raf']
         self.synth_mode = synth_mode
 
+        assert 0 <= audio_fade <= length
+
         # Resample, loop and extend spectral envelope.
         self.process_env()
 
         # Output.
         x = self.synthesize()
         x = normalize(x)
+        x = add_fade(x, audio_fade, self.sr)
         return x
 
     def process_env(self):
@@ -228,8 +235,8 @@ class StimulusGenerator:
     def get_mid_env(self):
         """Retrieve spectrum from 1/4 of cycle.
 
-        This spot approximately correlates to pi/2 or 3pi/2, i.e. where the
-        vibrato trajectory is in the middle of its throw (not max nor min).
+        This is approximately pi/2 or 3pi/2, i.e. where the vibrato trajectory
+        is in the middle of its throw (not max nor min).
         """
 
         mid_cycle_index = round(self.env.shape[0] // 4)
@@ -274,8 +281,6 @@ class StimulusGenerator:
             gain = self.gain_lookup(average_spectrum, frequency)
 
             x += gain * amp_envelope * self.make_carrier(frequency)
-
-        # TODO have a closer look at this output.
         return x
 
     def gain_lookup(self, spectrum, frequency):
@@ -382,13 +387,15 @@ class EnvelopeMorpher:
     """
     Generate variations of spectral modulation based on a prototype cycle.
     """
-    # TODO: log morphs/stats.
     def __init__(self, env: np.ndarray, pr: int = PITCH_RATE):
         assert env.ndim == 2
         self.env = copy(env)
 
         assert pr > 0
         self.pr = pr
+
+        # Log tracks randomization settings, and order of morphing.
+        self._log = []
 
     def shuffle_phase(self, num_shifts: int = 4):
         """
@@ -400,13 +407,24 @@ class EnvelopeMorpher:
         all_shifts = np.linspace(0, 1, num_shifts, endpoint=False)
         num_frames, num_bins = self.env.shape
 
+        tmp_log = []
+
         for k in np.arange(num_bins):
             shift = np.random.choice(all_shifts)
+
+            tmp_log.append(
+                {
+                    'bin': k,
+                    'shift': shift
+                }
+            )
 
             tmp = self.env[:, k]
             tmp = self.roll(tmp, shift)
 
             self.env[:, k] = tmp
+
+        self._log.append(tmp_log)
 
     def rap(self, max_gain: float = 10):
         """Single cycle at base-rate with randomized gains."""
@@ -415,6 +433,8 @@ class EnvelopeMorpher:
 
         # Find average gain values in the cycle for each bin.
         ave_envelope = np.mean(self.env, axis=0)
+
+        tmp_log = []
 
         for bin_ in range(num_bins):
             # Pick random gain (in dB) between 0 and `max_gain`.
@@ -431,8 +451,17 @@ class EnvelopeMorpher:
             # Multiply by base envelope gain.
             modulator *= ave_envelope[bin_]
 
+            tmp_log.append(
+                {
+                    'bin': bin_,
+                    'mod_gain': mod_gain
+                }
+            )
+
             # Place in array.
             self.env[:, bin_] = modulator
+
+        self._log.append(tmp_log)
 
     def show(self, zoom=None):
         tmp = self.env
@@ -442,6 +471,14 @@ class EnvelopeMorpher:
             tmp = tmp[:, :(num_bins // zoom)]
 
         plot_envelope(tmp, show=True)
+
+    def __str__(self):
+        """Print the morph log."""
+        s = f"""Summary\n-------\n\nTotal morphs:\t{len(self._log)}\n"""
+        for morph in self._log:
+            for bin_ in morph:
+                s += f"\n{bin_}"
+        return s
 
     def __call__(self):
         return self.env
