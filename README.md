@@ -1,6 +1,6 @@
 # Amp Mod
 
-Exploring the percept of AM-only vibrato.
+Exploring the percept of AM-only vibrato. See `test_synthesis.ipynb` for an overview and to hear stimulus examples.
 
 ```
 .
