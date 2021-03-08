@@ -32,7 +32,7 @@ from copy import copy
 import math
 import numpy as np
 
-from defaults import SAMPLE_RATE, PITCH_RATE
+from defaults import EPS, SAMPLE_RATE, PITCH_RATE
 from util import (
     add_fade, midi_to_hz, normalize, plot_envelope, stft_plot, resample
 )
@@ -46,7 +46,7 @@ class StimulusGenerator:
             self,
             sr: int = SAMPLE_RATE,
             pr: int = PITCH_RATE,
-            random_rate_upper_limit: float = 12.,
+            random_rate_upper_limit: float = 7.,
             random_rate_lower_limit: float = 4.,
     ):
         assert sr > 0
@@ -426,8 +426,8 @@ class EnvelopeMorpher:
 
         self._log.append(tmp_log)
 
-    def rap(self, max_gain: float = 10):
-        """Single cycle at base-rate with randomized gains."""
+    def rap(self, max_random_gain: float = None):
+        """Single cycle at base-rate with (possibly) randomized gains."""
 
         num_frames, num_bins = self.env.shape
 
@@ -437,8 +437,13 @@ class EnvelopeMorpher:
         tmp_log = []
 
         for bin_ in range(num_bins):
-            # Pick random gain (in dB) between 0 and `max_gain`.
-            mod_gain = np.random.rand() * max_gain
+
+            if max_random_gain:
+                # Pick random gain (in dB) between 0 and `max_gain`.
+                mod_gain = np.random.rand() * max_random_gain
+            else:
+                # Approximate partial-wise gains from envelope.
+                mod_gain = self.get_partial_gain(bin_)
 
             # Build modulator.
             modulator = np.cos(
@@ -471,6 +476,12 @@ class EnvelopeMorpher:
             tmp = tmp[:, :(num_bins // zoom)]
 
         plot_envelope(tmp, show=True)
+
+    def get_partial_gain(self, bin_):
+        """Calculate the modulation gain depth, by partial, in decibels."""
+        max_ = np.max(self.env[:, bin_], axis=0)
+        min_ = np.min(self.env[:, bin_], axis=0)
+        return 20 * np.log10(max_/min_ + EPS)
 
     def __str__(self):
         """Print the morph log."""
@@ -539,7 +550,7 @@ if __name__ == '__main__':
         env_ = np.sqrt(datum['env'])
 
         morpher = EnvelopeMorpher(env_)
-        morpher.rap(max_gain=10)
+        morpher.rap(max_random_gain=10)
         morpher.shuffle_phase(num_shifts=4)
 
         generator = StimulusGenerator(sr=SAMPLE_RATE, pr=PITCH_RATE)
