@@ -4,11 +4,12 @@ import os
 import pyworld as pw
 
 from glob import glob
-from scipy.signal import find_peaks
+from scipy.signal import find_peaks, decimate
 
 from defaults import ANA_PATH, PITCH_RATE
 from util import (
     force_mono,
+    get_amp_envelope,
     low_pass,
     normalize,
     read_wav,
@@ -17,7 +18,7 @@ from util import (
 )
 
 # Flags.
-VERBOSE = True
+VERBOSE = False
 
 # Analysis parameters.
 excerpt_in = 0.75
@@ -25,6 +26,7 @@ excerpt_dur = 1.75
 silence_db = -5
 pitch_lp = 10
 which_peak = 4
+amp_env_cutoff = 25.
 
 pattern = os.path.join(ANA_PATH, '*.wav')
 audio_files = glob(pattern)
@@ -45,23 +47,22 @@ for path in audio_files:
 
     x = force_mono(x)
     x = normalize(x)
-    x = trim_silence(x, threshold=silence_db)
+    x = trim_silence(x, threshold=silence_db, sr=sr)
     x = trim_to_duration(x, excerpt_in, excerpt_dur)
 
     if VERBOSE:
         print('WORLD analysis...')
-    # f0, sp, ap = pw.wav2world(x, sr, pitch_period_ms)
 
     _f0, t = pw.dio(x, sr, frame_period=pitch_period_ms)
     f0 = pw.stonemask(x, _f0, t, sr)
     sp = pw.cheaptrick(x, f0, t, sr)
     ap = pw.d4c(x, f0, t, sr)
 
-    # Remove first sample, which is always 0 Hz.
+    # Remove the first sample, which is always 0 Hz.
     tmp_f0 = f0[1:]
     tmp_f0 = low_pass(tmp_f0, pitch_lp, PITCH_RATE)
 
-    # Add one to compensate for the subtracted index above.
+    # Add `1` to compensate for the subtracted index above.
     peaks = find_peaks(tmp_f0)[0]
     peaks += 1
 
@@ -74,6 +75,13 @@ for path in audio_files:
 
     start = peaks[which_peak]
     end = peaks[which_peak + 1]
+
+    start_sr = int(round(start / PITCH_RATE * sr))
+    end_sr = int(round(end / PITCH_RATE * sr))
+
+    # TODO
+    # amp_env = get_amp_envelope(x, cutoff=amp_env_cutoff, sr=sr)
+    # amp_env = amp_env[start_sr:end_sr]
 
     single_cycles.append(
         {
