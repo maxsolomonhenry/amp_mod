@@ -94,6 +94,12 @@ def normalize(x: np.ndarray) -> np.ndarray:
     return x / np.max(np.abs(x))
 
 
+def plot_envelope(env, show=True):
+    plt.imshow(env.T, aspect='auto', origin='lower')
+    if show:
+        plt.show()
+
+
 def read_wav(path: str):
     x, sample_rate = load(path, sr=SAMPLE_RATE, dtype=np.float64)
     return sample_rate, x

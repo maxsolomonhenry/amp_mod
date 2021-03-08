@@ -33,7 +33,7 @@ import math
 import numpy as np
 
 from defaults import SAMPLE_RATE, PITCH_RATE
-from util import midi_to_hz, normalize, stft_plot, resample
+from util import midi_to_hz, normalize, plot_envelope, stft_plot, resample
 
 
 class StimulusGenerator:
@@ -208,13 +208,11 @@ class StimulusGenerator:
 
     def apply_spectral_fade(self, tmp_env):
         """
-        Fade in spectral modulation, taking the middle of the cycle as neutral.
+        Fade in spectral modulation, taking approx pi/2 of the cycle as neutral.
         """
         fade = self.get_depth_trajectory()
 
-        # Retrieve spectrum from middle of cycle.
-        mid_cycle_index = round(self.env.shape[0] // 2)
-        mid_env = self.env[mid_cycle_index, :]
+        mid_env = self.get_mid_env()
 
         # Fade out middle spectrum.
         mid_env = np.outer((1 - fade), mid_env)
@@ -226,6 +224,16 @@ class StimulusGenerator:
         tmp_env += mid_env
 
         return tmp_env
+
+    def get_mid_env(self):
+        """Retrieve spectrum from 1/4 of cycle.
+
+        This spot approximately correlates to pi/2 or 3pi/2, i.e. where the
+        vibrato trajectory is in the middle of its throw (not max nor min).
+        """
+
+        mid_cycle_index = round(self.env.shape[0] // 4)
+        return self.env[mid_cycle_index, :]
 
     def _resample(self, tmp_env, frame_rate):
         return resample(tmp_env, frame_rate, self.sr)
@@ -379,6 +387,9 @@ class EnvelopeMorpher:
         assert env.ndim == 2
         self.env = copy(env)
 
+        assert pr > 0
+        self.pr = pr
+
     def shuffle_phase(self, num_shifts: int = 4):
         """
         Randomly shuffle each column.
@@ -397,15 +408,49 @@ class EnvelopeMorpher:
 
             self.env[:, k] = tmp
 
-    def low_pass(self, cutoff:float = 25.):
-        """
-        Low-pass filter all partials.
-        """
-        # TODO
-        pass
+    def rap(self, max_gain: float = 10):
+        """Single cycle at base-rate with randomized gains."""
+
+        num_frames, num_bins = self.env.shape
+
+        # Find average gain values in the cycle for each bin.
+        ave_envelope = np.mean(self.env, axis=0)
+
+        for bin_ in range(num_bins):
+            # Pick random gain (in dB) between 0 and `max_gain`.
+            mod_gain = np.random.rand() * max_gain
+
+            # Build modulator.
+            modulator = np.cos(
+                2 * np.pi * np.linspace(0, 1, num_frames, endpoint=False)
+            )
+
+            modulator *= self.db_to_linear_coefficient(mod_gain)
+            modulator += 1.
+
+            # Multiply by base envelope gain.
+            modulator *= ave_envelope[bin_]
+
+            # Place in array.
+            self.env[:, bin_] = modulator
+
+    def show(self, zoom=None):
+        tmp = self.env
+
+        if zoom:
+            num_bins = tmp.shape[1]
+            tmp = tmp[:, :(num_bins // zoom)]
+
+        plot_envelope(tmp, show=True)
 
     def __call__(self):
         return self.env
+
+    @staticmethod
+    def db_to_linear_coefficient(decibels):
+        a = 10. ** (decibels / 20) - 1
+        b = 10. ** (decibels / 20) + 1
+        return a / b
 
     @staticmethod
     def roll(in_, shift):
@@ -457,6 +502,7 @@ if __name__ == '__main__':
         env_ = np.sqrt(datum['env'])
 
         morpher = EnvelopeMorpher(env_)
+        morpher.rap(max_gain=10)
         morpher.shuffle_phase(num_shifts=4)
 
         generator = StimulusGenerator(sr=SAMPLE_RATE, pr=PITCH_RATE)
