@@ -1,4 +1,6 @@
 """
+Stimuli can take on one of eight conditions:
+
 The BASIC stimulus has both FM and the complex AM derived from scanning the
 resonant structure of the instrument, as described by Mathews and others
 (Mathews and Kohut, 1973), and serves as a positive control.
@@ -6,26 +8,45 @@ resonant structure of the instrument, as described by Mathews and others
 A FROZEN condition keeps the complex AM of a plausible resonant structure, but
 contains no FM.
 
-In a random AM phase (RAP) condition, each partial is amplitude
-modulated at the vibrato rate, having a random gain between 0 and 10 dB, and
-with an initial modulation phase randomly selected as one of four values equal
-divisions of the oscillation: {0, π/2, π, 3π/2}.
+A SHUFFLE condition keeps the AM trajectory of each partial, but shuffles
+the phase of each by a random quarter of the cycle: {0, π/2, π, 3π/2}.
 
-In the random AM frequency (RAF) condition, each partial is amplitude modulated
+The SIMPLE condition keeps the average spectral envelope and partial-wise
+modulation depths of the original signal, but replaces the modulator signals
+with one-cycle sinusoids all having the same modulation rate. Each partial takes
+the time-averaged spectral envelope for its center amplitude. Partials are
+amplitude-modulated such that their peak- and minimum- gains match the original
+time-varying spectral envelope. The phase of these modulators is necessarily
+randomized.
+
+The random gain (RAG) condition is constructed much like the SIMPLE condition,
+except its modulation depths are randomly determined per-partial to a value
+between 0 – 10 dB according to the following formula:
+
+    G_k = 20\log_{10}\left(\frac{\max p_k(t)}{\min p_k(t)}\right)
+
+where Gk is the modulation depth of the kth partial, and pk(t) is the partial
+amplitude. Random resonance gain has been used to construct compelling models of
+vibrato in the past (Gough, 2005); though here by scrambling both partial phase
+and gain, this condition effectively avoids implying any plausible resonant
+structure.
+
+The SHUFFLE, SIMPLE, and RAG conditions are also alternately synthesized in a
+random AM frequency (RAF) condition. Here, each partial is amplitude modulated
 at a frequency selected from a random exponential distribution between 4 Hz and
-12 Hz, the span of commonly performed vibrato rates (Verfaille, 2005). Each
-partial has a random modulation gain between 0 and 10 dB.
+7 Hz, the span of commonly performed vibrato rates (Sundberg, 1987). We choose
+an exponential distribution rather than a linear one, based on existing evidence
+suggesting an exponential perceptual scaling of modulation rates (Grant, 1998).
+Note that in this condition, the relative phase of the modulators is implicitly
+randomized.
 
-In the pure AM condition (PAM) the entire amplitude envelope is modulated by
-10 dB at the vibrato rate.
-
-A negative control is included that has no AM or FM.
+A control stimulus is included that has no AM or FM.
 
 In all non-BASIC conditions, the partial gains are set to a "resting" value
-determined by averaging the time-varying spectral envelope of a single vibrato
-cycle. Only the BASIC condition has FM. All stimuli are generated at two vibrato
-speeds, 5 Hz reflecting typical vibrato, and 2 Hz, reflecting an unrealistically
-slow vibrato. Parameters for all random stimuli are logged.
+measured from the time-varying spectral envelope at one quarter of a single
+vibrato cycle, corresponding to the "middle" of the vibrato cycle. Only the
+BASIC condition has FM. Parameters for all random stimuli are logged.
+
 """
 
 from copy import copy
