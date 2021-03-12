@@ -186,24 +186,33 @@ class StimulusGenerator:
         """
         Generate envelope with each partial amp-modulated at a different rate.
         """
-        num_frames, num_bins = self.env.shape
+        num_frames = self.env.shape[0]
+        num_partials = self.num_partials
 
         num_samples = self.get_num_samples()
-        tmp_env = np.zeros([num_samples, num_bins])
+        out_ = np.zeros([num_samples, num_partials])
 
-        for i in range(num_bins):
+        tmp_env = copy(self.env)
+
+        for k in range(num_partials):
+            frequency = (k + 1) * self.f0
+
             random_rate = self.get_random_rate()
-
             num_cycles = math.ceil(self.length * random_rate)
             frame_rate = num_frames * random_rate
 
-            tmp = np.tile(self.env[:, i], num_cycles)
+            # Calculate partial trajectory.
+            tmp = self.get_amp_from_frequency(frequency, tmp_env)
+
+            # Cycle to desired synthesis length and resample.
+            tmp = np.tile(tmp, num_cycles)
             tmp = self.loop(tmp)
             tmp = self._resample(tmp, frame_rate)
 
-            tmp_env[:, i] = tmp[:num_samples]
+            # Truncate and place in output.
+            out_[:, k] = tmp[:num_samples]
 
-        return tmp_env
+        return out_
 
     def get_random_rate(self):
         upper = self.random_rate_upper_limit
@@ -218,8 +227,11 @@ class StimulusGenerator:
         num_cycles = math.ceil(self.length * self.mod_rate)
         num_samples = self.get_num_samples()
 
-        # Extend in time to desired output length.
+        # Calculate only required harmonic partials.
         tmp_env = copy(self.env)
+        tmp_env = self.reduce_to_relevant_partials(tmp_env)
+
+        # Extend in time to desired output length.
         tmp_env = np.tile(tmp_env, [num_cycles, 1])
 
         # Wrap-around first value to extend interpolation.
@@ -234,10 +246,56 @@ class StimulusGenerator:
 
         return tmp_env
 
+    def reduce_to_relevant_partials(self, tmp_env):
+        """
+        Extract only spectral information relevant to synthesis.
+        """
+
+        num_frames = tmp_env.shape[0]
+        num_partials = self.num_partials
+
+        out_ = np.zeros([num_frames, num_partials])
+
+        for k in range(self.num_partials):
+            frequency = (k + 1) * self.f0
+            out_[:, k] += self.get_amp_from_frequency(frequency, tmp_env)
+
+        return out_
+
+    def get_amp_from_frequency(self, frequency, tmp_env):
+        """
+        Linear interpolate to extract frequency-wise amplitude envelope.
+        """
+
+        # Expand to facilitate broadcasting if necessary (code for 1- or 2-d).
+        if tmp_env.ndim == 1:
+            tmp_env = tmp_env[None, :]
+
+        num_frames = tmp_env.shape[0]
+        amp_envelope = np.zeros(num_frames)
+
+        # Find the (possibly fractional) bin corresponding to `frequency`.
+        bin_num = self.get_bin_num(frequency)
+        bin_fraction = bin_num % 1
+
+        bin_floor = math.floor(bin_num)
+        bin_ceil = math.ceil(bin_num)
+
+        # Read amplitude envelope based on the desired frequency.
+        if bin_fraction == 0:
+            amp_envelope += tmp_env[:, bin_num]
+        else:
+            # Linear interpolation between adjacent bins.
+            amp_envelope += (1 - bin_fraction) * tmp_env[:, bin_floor]
+            amp_envelope += bin_fraction * tmp_env[:, bin_ceil]
+
+        return amp_envelope
+
     def apply_spectral_fade(self, tmp_env):
         """
         Fade in spectral modulation, taking approx pi/2 of the cycle as neutral.
         """
+
         fade = self.get_depth_trajectory()
 
         mid_env = self.get_mid_env()
@@ -261,7 +319,17 @@ class StimulusGenerator:
         """
 
         mid_cycle_index = round(self.env.shape[0] // 4)
-        return self.env[mid_cycle_index, :]
+        tmp = self.env[mid_cycle_index, :]
+
+        out_ = np.zeros(self.num_partials)
+
+        # Interpolate for fractional bin values.
+        for k in range(self.num_partials):
+            frequency = (k + 1) * self.f0
+
+            out_[k] = self.get_amp_from_frequency(frequency, tmp)
+
+        return out_
 
     def _resample(self, tmp_env, frame_rate):
         return resample(tmp_env, frame_rate, self.sr)
@@ -279,7 +347,7 @@ class StimulusGenerator:
         return x
 
     def standard_synthesis(self, x):
-        for k in np.arange(1, self.num_partials + 1):
+        for k in np.arange(self.num_partials):
             x += self.make_partial(k)
         return x
 
@@ -288,62 +356,27 @@ class StimulusGenerator:
         Returns a stimulus with a static spectral envelope, but having a global
         amplitude envelope of an equivalent spectrum-modulated signal.
         """
-        amp_envelope = np.empty_like(x)
-        average_spectrum = np.mean(self.env, axis=0)
 
-        # Lookup and sum all partial amplitudes into one master envelope.
-        for k in np.arange(1, self.num_partials + 1):
-            frequency = k * self.f0
-            amp_envelope += self.make_amp_envelope(frequency)
+        average_gains = np.mean(self.processed_env, axis=0)
+
+        # Sum all partial amplitudes into one master envelope.
+        amp_envelope = np.sum(self.processed_env, axis=1)
 
         # Apply master envelope to each partial, scaling partials to average.
-        for k in np.arange(1, self.num_partials + 1):
-            frequency = k * self.f0
-            gain = self.gain_lookup(average_spectrum, frequency)
+        for k in np.arange(self.num_partials):
+            frequency = (k + 1) * self.f0
+            gain = average_gains[k]
 
             x += gain * amp_envelope * self.make_carrier(frequency)
         return x
 
-    def gain_lookup(self, spectrum, frequency):
-        gain = 0
-
-        bin_num = self.get_bin_num(frequency)
-        bin_fraction = bin_num % 1.
-
-        # Linearly interpolate if necessary.
-        if bin_fraction == 0:
-            gain = spectrum[bin_num]
-        else:
-            gain += (1 - bin_fraction) * spectrum[math.floor(bin_num)]
-            gain += bin_fraction * spectrum[math.ceil(bin_num)]
-
-        return gain
-
     def make_partial(self, k):
-        frequency = k * self.f0
-        amp_envelope = self.make_amp_envelope(frequency)
+        frequency = (k + 1) * self.f0
+
+        amp_envelope = self.processed_env[:, k]
         carrier = self.make_carrier(frequency)
+
         return amp_envelope * carrier
-
-    def make_amp_envelope(self, frequency):
-        # Find the (possibly fractional) bin corresponding to `frequency`.
-        bin_num = self.get_bin_num(frequency)
-        bin_fraction = bin_num % 1
-
-        num_samples = self.get_num_samples()
-        amp_envelope = np.zeros(num_samples)
-
-        # Read amplitude envelope based on the desired frequency.
-        if bin_fraction == 0:
-            amp_envelope += self.processed_env[:, bin_num]
-        else:
-            # Linear interpolation between adjacent bins.
-            amp_envelope += (1 - bin_fraction) * self.processed_env[:, math.floor(bin_num)]
-            amp_envelope += bin_fraction * self.processed_env[:, math.ceil(bin_num)]
-
-        # TODO possibly LP filter this to `self.frame_rate//2`
-
-        return amp_envelope
 
     def get_bin_num(self, frequency):
         return frequency / (self.sr // 2) * self.env.shape[1]
@@ -556,7 +589,7 @@ if __name__ == '__main__':
         return 12 * np.log2(max_/min_) / 2
 
     # Synthesis parameters.
-    num_partials = 70
+    partials = 70
 
     # Midi 48 -> C3.
     midi_pitch = 48
@@ -579,11 +612,12 @@ if __name__ == '__main__':
             f0=f0,
             fm_depth=0.0,
             env=morpher(),
-            num_partials=70,
+            num_partials=partials,
             length=2.1,
             mod_rate=5.,
             mod_hold=0.3,
             mod_fade=0.7,
+            synth_mode='pam'
         )
 
         stft_plot(x)
