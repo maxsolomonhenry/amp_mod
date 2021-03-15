@@ -171,6 +171,12 @@ def save_data(path: str, data, force: bool = False):
         pickle.dump(data, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
+def safe_mkdir(path):
+    if not os.path.exists(path):
+        Warning(f"Creating directory {path}...")
+        os.mkdir(path)
+
+
 def stft_plot(
     signal: np.ndarray,
     sample_rate: int = SAMPLE_RATE,
