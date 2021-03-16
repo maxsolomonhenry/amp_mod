@@ -11,8 +11,14 @@ from src.util import midi_to_hz, safe_mkdir
 
 # Helper.
 def quick_write(_file_path, _filename, _data):
+    """Write file as 16bit mono PCM."""
+
     write_path = os.path.join(_file_path, _filename)
-    wavfile.write(write_path, SAMPLE_RATE, _data)
+
+    amplitude = np.iinfo(np.int16).max
+    _data *= amplitude
+
+    wavfile.write(write_path, SAMPLE_RATE, _data.astype(np.int16))
 
 
 # Load env as linear amplitude. (CheapTrick calculates the power spectrum.)
@@ -21,7 +27,7 @@ env = np.sqrt(env)
 
 # Experiment parameters.
 num_subjects = 1
-num_blocks = 2
+num_blocks = 4
 repeats_per_block = 2
 
 # Synthesis parameters.
