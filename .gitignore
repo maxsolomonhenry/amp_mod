@@ -1,3 +1,7 @@
+# Subject-related stimulus directories.
+audio/ana/**
+audio/syn/**
+
 # Sound files.
 *.wav
 *.mp3

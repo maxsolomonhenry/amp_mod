@@ -1,7 +1,7 @@
-import copy
 import numpy as np
 import os
 from scipy.io import wavfile
+from tqdm import tqdm
 
 from src import macro
 from src.analysis import single_cycles
@@ -19,12 +19,10 @@ def quick_write(_file_path, _filename, _data):
 env = single_cycles[0]['env']
 env = np.sqrt(env)
 
-# TODO parseargs
-
 # Experiment parameters.
 num_subjects = 1
-num_blocks = 1
-repeats_per_block = 1
+num_blocks = 2
+repeats_per_block = 2
 
 # Synthesis parameters.
 synthesis_params = {
@@ -40,21 +38,23 @@ synthesis_params = {
 }
 
 for s in range(num_subjects):
+    print(f"Generating stimuli for subject {s}...")
 
     # Make subject directory.
-    file_path = os.path.join(SYN_PATH, f"subject_{s}/")
-    safe_mkdir(file_path)
+    subject_path = os.path.join(SYN_PATH, f"subject_{s}/")
+    safe_mkdir(subject_path)
 
-    log_path = os.path.join(file_path, f"stimlog_subject_{s}.txt")
+    # Open log.
+    log_path = os.path.join(subject_path, f"stimlog_subject_{s}.txt")
     log = open(log_path, "w")
 
-    log.write(f"Subject: {b}\n" + "-" * 10 + "\n")
+    log.write(f"Subject: {s}\n" + "-" * 10 + "\n")
 
-    for b in range(num_blocks):
+    for b in tqdm(range(num_blocks)):
 
         # Make block directory.
-        file_path = os.path.join(file_path, f"block_{b}/")
-        safe_mkdir(file_path)
+        block_path = os.path.join(subject_path, f"block_{b}/")
+        safe_mkdir(block_path)
 
         log.write("\n" + "="*7 + f"\nBlock {b}\n" + "="*7 + "\n")
 
@@ -63,32 +63,29 @@ for s in range(num_subjects):
 
             # BASIC.
             tmp_x = macro.make_basic(synthesis_params)
-            quick_write(file_path, f"BASIC_{r}.wav", tmp_x)
+            quick_write(block_path, f"BASIC_{r}.wav", tmp_x)
 
             # FROZEN.
             tmp_x = macro.make_frozen(synthesis_params)
-            quick_write(file_path, f"FROZEN_{r}.wav", tmp_x)
+            quick_write(block_path, f"FROZEN_{r}.wav", tmp_x)
 
             # SHUFFLE and SHUFFLE RAF.
             tmp_x, tmp_x_raf = macro.make_shuffle(synthesis_params, log)
-            quick_write(file_path, f"SHUFFLE_{r}.wav", tmp_x)
-            quick_write(file_path, f"SHUFFLE_RAF_{r}.wav", tmp_x_raf)
+            quick_write(block_path, f"SHUFFLE_{r}.wav", tmp_x)
+            quick_write(block_path, f"SHUFFLE_RAF_{r}.wav", tmp_x_raf)
 
             # SIMPLE and SIMPLE RAF.
             tmp_x, tmp_x_raf = macro.make_simple(synthesis_params, log)
-            quick_write(file_path, f"SIMPLE_{r}.wav", tmp_x)
-            quick_write(file_path, f"SIMPLE_RAF_{r}.wav", tmp_x_raf)
+            quick_write(block_path, f"SIMPLE_{r}.wav", tmp_x)
+            quick_write(block_path, f"SIMPLE_RAF_{r}.wav", tmp_x_raf)
 
             # RAG and RAG RAF.
             tmp_x, tmp_x_raf = macro.make_rag(synthesis_params, log)
-            quick_write(file_path, f"RAG_{r}.wav", tmp_x)
-            quick_write(file_path, f"RAG_RAF_{r}.wav", tmp_x_raf)
+            quick_write(block_path, f"RAG_{r}.wav", tmp_x)
+            quick_write(block_path, f"RAG_RAF_{r}.wav", tmp_x_raf)
 
             # Control.
             tmp_x = macro.make_control(synthesis_params)
-            quick_write(file_path, f"CONTROL_{r}.wav", tmp_x)
-
-            # TODO Update log.
-            # Save log.
+            quick_write(block_path, f"CONTROL_{r}.wav", tmp_x)
 
     log.close()

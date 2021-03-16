@@ -28,22 +28,22 @@ def add_fade(
     Adds linear fade in/out to signal.
     """
 
-    num_samples = int(fade_length * rate)
+    if fade_length > 0.:
+        num_samples = int(fade_length * rate)
 
-    # Build ramp.
-    ramp = np.linspace(0, 1, num_samples, endpoint=False)
+        # Build ramp.
+        ramp = np.linspace(0, 1, num_samples, endpoint=False)
 
-    mean = np.mean(signal)
-    signal -= mean
+        mean = np.mean(signal)
+        signal -= mean
 
-    # Fade in/out.
+        # Fade in/out.
+        if fade_out:
+            signal[-num_samples:] *= ramp[::-1]
+        else:
+            signal[:num_samples] *= ramp
 
-    if fade_out:
-        signal[-num_samples:] *= ramp[::-1]
-    else:
-        signal[:num_samples] *= ramp
-
-    signal += mean
+        signal += mean
 
     return signal
 

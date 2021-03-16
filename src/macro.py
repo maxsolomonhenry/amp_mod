@@ -45,7 +45,7 @@ def make_frozen(args):
 
 
 def make_shuffle(args, log):
-    morpher = EnvelopeMorpher(args['env'])
+    morpher = EnvelopeMorpher(args['env'], args['f0'])
     morpher.shuffle_phase(num_shifts=4)
 
     x = generator(
@@ -73,11 +73,14 @@ def make_shuffle(args, log):
         synth_mode='raf',
     )
 
+    log.write("\nSHUFFLE\n" + "_"*7 + "\n")
+    log.write(f"\n{morpher._log}\n")
+
     return x, x_raf
 
 
-def make_simple(args):
-    morpher = EnvelopeMorpher(args['env'])
+def make_simple(args, log):
+    morpher = EnvelopeMorpher(args['env'], args['f0'])
     morpher.rap()
     morpher.shuffle_phase(num_shifts=4)
 
@@ -106,11 +109,14 @@ def make_simple(args):
         synth_mode='raf',
     )
 
+    log.write("\nSIMPLE\n" + "_" * 7 + "\n")
+    log.write(f"\n{morpher._log}\n")
+
     return x, x_raf
 
 
-def make_rag(args):
-    morpher = EnvelopeMorpher(args['env'])
+def make_rag(args, log):
+    morpher = EnvelopeMorpher(args['env'], args['f0'])
     morpher.rap(max_random_gain=10)
     morpher.shuffle_phase(num_shifts=4)
 
@@ -138,6 +144,9 @@ def make_rag(args):
         audio_fade=args['audio_fade'],
         synth_mode='raf'
     )
+
+    log.write("\nRAG\n" + "_" * 7 + "\n")
+    log.write(f"\n{morpher._log}\n")
 
     return x, x_raf
 
