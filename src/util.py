@@ -22,7 +22,7 @@ def add_fade(
     signal: np.ndarray,
     fade_length: float,
     rate: int,
-    f_out: bool = False,
+    fade_out: bool = False,
 ):
     """
     Adds linear fade in/out to signal.
@@ -38,7 +38,7 @@ def add_fade(
 
     # Fade in/out.
 
-    if f_out:
+    if fade_out:
         signal[-num_samples:] *= ramp[::-1]
     else:
         signal[:num_samples] *= ramp

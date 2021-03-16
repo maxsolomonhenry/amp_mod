@@ -109,7 +109,7 @@ class StimulusGenerator:
             mod_hold: float,
             mod_fade: float,
             synth_mode: str = 'default',
-            audio_fade: float = 0.01,
+            audio_fade: float = 0.,
     ) -> np.ndarray:
         """Generate a spectral- and frequency- modulated tone.
 
@@ -168,7 +168,10 @@ class StimulusGenerator:
         # Output.
         x = self.synthesize()
         x = normalize(x)
+
+        # Fade in/out.
         x = add_fade(x, audio_fade, self.sr)
+        x = add_fade(x, audio_fade, self.sr, fade_out=True)
         return x
 
     def process_env(self):
