@@ -67,7 +67,7 @@ class StimulusGenerator:
             self,
             sr: int = SAMPLE_RATE,
             pr: int = PITCH_RATE,
-            random_rate_upper_limit: float = 7.,
+            random_rate_upper_limit: float = 12.,
             random_rate_lower_limit: float = 4.,
     ):
         assert sr > 0
