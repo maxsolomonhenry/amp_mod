@@ -67,7 +67,7 @@ class StimulusGenerator:
             self,
             sr: int = SAMPLE_RATE,
             pr: int = PITCH_RATE,
-            random_rate_upper_limit: float = 7.,
+            random_rate_upper_limit: float = 12.,
             random_rate_lower_limit: float = 4.,
     ):
         assert sr > 0
@@ -109,7 +109,7 @@ class StimulusGenerator:
             mod_hold: float,
             mod_fade: float,
             synth_mode: str = 'default',
-            audio_fade: float = 0.01,
+            audio_fade: float = 0.,
     ) -> np.ndarray:
         """Generate a spectral- and frequency- modulated tone.
 
@@ -168,7 +168,10 @@ class StimulusGenerator:
         # Output.
         x = self.synthesize()
         x = normalize(x)
+
+        # Fade in/out.
         x = add_fade(x, audio_fade, self.sr)
+        x = add_fade(x, audio_fade, self.sr, fade_out=True)
         return x
 
     def process_env(self):
@@ -441,12 +444,27 @@ class EnvelopeMorpher:
     """
     Generate variations of spectral modulation based on a prototype cycle.
     """
-    def __init__(self, env: np.ndarray, pr: int = PITCH_RATE):
+    def __init__(
+            self,
+            env: np.ndarray,
+            pr: int = PITCH_RATE,
+            sr: int = SAMPLE_RATE,
+            f0: float = None
+    ):
         assert env.ndim == 2
         self.env = copy(env)
 
         assert pr > 0
         self.pr = pr
+
+        assert sr > 0
+        self.sr = sr
+
+        if f0 is not None:
+            assert 0 < f0 <= (sr // 2)
+            self.f0 = f0
+        else:
+            self.f0 = None
 
         # Log tracks randomization settings, and order of morphing.
         self._log = []
@@ -461,10 +479,21 @@ class EnvelopeMorpher:
         all_shifts = np.linspace(0, 1, num_shifts, endpoint=False)
         num_frames, num_bins = self.env.shape
 
+        # Used for pairing bins that surround a partial of interest.
+        bins_above_partials = None
+        if self.f0 is not None:
+            bins_above_partials = self.get_bins_above_partials()
+
         tmp_log = []
+        last_shift = None
 
         for k in np.arange(num_bins):
-            shift = np.random.choice(all_shifts)
+
+            # If necessary, match this shift to the previous bin.
+            if self.f0 and (k in bins_above_partials):
+                shift = last_shift
+            else:
+                shift = np.random.choice(all_shifts)
 
             tmp_log.append(
                 {
@@ -478,7 +507,38 @@ class EnvelopeMorpher:
 
             self.env[:, k] = tmp
 
+            last_shift = copy(shift)
+
         self._log.append(tmp_log)
+
+    def get_bin_num(self, frequency):
+        return frequency / (self.sr // 2) * self.env.shape[1]
+
+    def get_bins_above_partials(self):
+        """Collect bins around overtone partials (higher in frequency only).
+
+        In shuffling conditions, this allows for some bins to be shuffled in
+        sync with one another, to avoid artifacts in synthesis later on.
+        """
+
+        out_ = []
+
+        max_partial = int(
+            (self.sr // 2) // self.f0
+        )
+
+        for p in range(1, max_partial + 1):
+            frequency = self.f0 * p
+            bin_number = self.get_bin_num(frequency)
+
+            if bin_number % 1 != 0:
+                out_.append(math.ceil(bin_number))
+
+        return out_
+
+    def get_bin_frequency(self, k):
+        num_bins = self.env.shape[1]
+        return k / num_bins * (self.sr / 2)
 
     def rap(self, max_random_gain: float = None):
         """Single cycle at base-rate with (possibly) randomized gains."""
@@ -598,18 +658,18 @@ if __name__ == '__main__':
 
     for datum in single_cycles:
         fm_depth = get_fm_depth(datum)
-        f0 = midi_to_hz(midi_pitch)
+        f0_ = midi_to_hz(midi_pitch)
 
         # Bring to linear amplitude. Env is calculated as the power spectrum.
         env_ = np.sqrt(datum['env'])
 
-        morpher = EnvelopeMorpher(env_)
+        morpher = EnvelopeMorpher(env_, f0=f0_)
         morpher.rap(max_random_gain=10)
         morpher.shuffle_phase(num_shifts=4)
 
         generator = StimulusGenerator(sr=SAMPLE_RATE, pr=PITCH_RATE)
         x = generator(
-            f0=f0,
+            f0=f0_,
             fm_depth=0.0,
             env=morpher(),
             num_partials=partials,
@@ -617,7 +677,8 @@ if __name__ == '__main__':
             mod_rate=5.,
             mod_hold=0.3,
             mod_fade=0.7,
-            synth_mode='pam'
+            synth_mode='default',
+            audio_fade=0.25,
         )
 
         stft_plot(x)
@@ -625,7 +686,7 @@ if __name__ == '__main__':
         synth_out.append(
             {
                 'filename': datum['filename'],
-                'f0': f0,
+                'f0': f0_,
                 'wav': x,
             }
         )

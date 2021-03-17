@@ -22,28 +22,28 @@ def add_fade(
     signal: np.ndarray,
     fade_length: float,
     rate: int,
-    f_out: bool = False,
+    fade_out: bool = False,
 ):
     """
     Adds linear fade in/out to signal.
     """
 
-    num_samples = int(fade_length * rate)
+    if fade_length > 0.:
+        num_samples = int(fade_length * rate)
 
-    # Build ramp.
-    ramp = np.linspace(0, 1, num_samples, endpoint=False)
+        # Build ramp.
+        ramp = np.linspace(0, 1, num_samples, endpoint=False)
 
-    mean = np.mean(signal)
-    signal -= mean
+        mean = np.mean(signal)
+        signal -= mean
 
-    # Fade in/out.
+        # Fade in/out.
+        if fade_out:
+            signal[-num_samples:] *= ramp[::-1]
+        else:
+            signal[:num_samples] *= ramp
 
-    if f_out:
-        signal[-num_samples:] *= ramp[::-1]
-    else:
-        signal[:num_samples] *= ramp
-
-    signal += mean
+        signal += mean
 
     return signal
 
@@ -169,6 +169,12 @@ def save_data(path: str, data, force: bool = False):
     print('Saving file {}...'.format(os.path.basename(path)))
     with open(path, 'wb') as handle:
         pickle.dump(data, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+
+def safe_mkdir(path):
+    if not os.path.exists(path):
+        Warning(f"Creating directory {path}...")
+        os.mkdir(path)
 
 
 def stft_plot(
