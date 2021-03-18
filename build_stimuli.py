@@ -75,6 +75,10 @@ for s in range(num_subjects):
             tmp_x = macro.make_frozen(synthesis_params)
             quick_write(block_path, f"FROZEN_{r}.wav", tmp_x)
 
+            # FM-ONLY.
+            tmp_x = macro.make_fm_only(synthesis_params)
+            quick_write(block_path, f"FM_ONLY_{r}.wav", tmp_x)
+
             # SHUFFLE and SHUFFLE RAF.
             tmp_x, tmp_x_raf = macro.make_shuffle(synthesis_params, log)
             quick_write(block_path, f"SHUFFLE_{r}.wav", tmp_x)
@@ -89,6 +93,10 @@ for s in range(num_subjects):
             tmp_x, tmp_x_raf = macro.make_rag(synthesis_params, log)
             quick_write(block_path, f"RAG_{r}.wav", tmp_x)
             quick_write(block_path, f"RAG_RAF_{r}.wav", tmp_x_raf)
+
+            # PAM. TODO
+            tmp_x = macro.make_pam(synthesis_params)
+            quick_write(block_path, f"PAM_{r}.wav", tmp_x)
 
             # Control.
             tmp_x = macro.make_control(synthesis_params)

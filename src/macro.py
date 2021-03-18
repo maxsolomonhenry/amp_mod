@@ -151,6 +151,21 @@ def make_rag(args, log):
     return x, x_raf
 
 
+def make_fm_only(args):
+    return generator(
+        f0=args['f0'],
+        fm_depth=args['fm_depth'],
+        env=args['env'],
+        num_partials=args['num_partials'],
+        length=args['length'],
+        mod_rate=args['mod_rate'],
+        mod_hold=args['length'],  # TODO (long fade => no fm)
+        mod_fade=0.,
+        audio_fade=args['audio_fade'],
+        synth_mode='pam',
+    )
+
+
 def make_control(args):
     return generator(
         f0=args['f0'],
@@ -161,6 +176,21 @@ def make_control(args):
         mod_rate=args['mod_rate'],
         mod_hold=args['length'],
         mod_fade=0.,
+        audio_fade=args['audio_fade'],
+        synth_mode='pam',
+    )
+
+
+def make_pam(args):
+    return generator(
+        f0=args['f0'],
+        fm_depth=0.,
+        env=args['env'],
+        num_partials=args['num_partials'],
+        length=args['length'],
+        mod_rate=args['mod_rate'],
+        mod_hold=args['mod_hold'],
+        mod_fade=args['mod_fade'],
         audio_fade=args['audio_fade'],
         synth_mode='pam',
     )
