@@ -94,7 +94,7 @@ for s in range(num_subjects):
             quick_write(block_path, f"RAG_{r}.wav", tmp_x)
             quick_write(block_path, f"RAG_RAF_{r}.wav", tmp_x_raf)
 
-            # PAM. TODO
+            # PAM.
             tmp_x = macro.make_pam(synthesis_params)
             quick_write(block_path, f"PAM_{r}.wav", tmp_x)
 

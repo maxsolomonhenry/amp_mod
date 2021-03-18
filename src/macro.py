@@ -152,17 +152,20 @@ def make_rag(args, log):
 
 
 def make_fm_only(args):
+    morpher = EnvelopeMorpher(args['env'], args['f0'])
+    morpher.time_average()
+
     return generator(
         f0=args['f0'],
         fm_depth=args['fm_depth'],
-        env=args['env'],
+        env=morpher(),
         num_partials=args['num_partials'],
         length=args['length'],
         mod_rate=args['mod_rate'],
-        mod_hold=args['length'],  # TODO (long fade => no fm)
-        mod_fade=0.,
+        mod_hold=args['mod_hold'],
+        mod_fade=args['mod_fade'],
         audio_fade=args['audio_fade'],
-        synth_mode='pam',
+        synth_mode='default',
     )
 
 
