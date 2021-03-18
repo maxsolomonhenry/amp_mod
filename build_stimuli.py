@@ -26,9 +26,9 @@ env = single_cycles[0]['env']
 env = np.sqrt(env)
 
 # Experiment parameters.
-num_subjects = 1
-num_blocks = 4
-repeats_per_block = 2
+num_subjects = 10
+num_blocks = 2
+repeats_per_block = 4
 
 # Synthesis parameters.
 synthesis_params = {
@@ -44,7 +44,7 @@ synthesis_params = {
 }
 
 for s in range(num_subjects):
-    print(f"Generating stimuli for subject {s}...")
+    print(f"\nGenerating stimuli for subject {s}...")
 
     # Make subject directory.
     subject_path = os.path.join(SYN_PATH, f"subject_{s}/")
