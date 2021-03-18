@@ -40,7 +40,12 @@ suggesting an exponential perceptual scaling of modulation rates (Grant, 1998).
 Note that in this condition, the relative phase of the modulators is implicitly
 randomized.
 
-A control stimulus is included that has no AM or FM.
+A PAM condition has only one global amplitude modulation. It sums the amplitudes
+of the partials together, then applies it to a time-averaged spectral envelope.
+
+An FM-ONLY stimulus applies FM to a time-averaged spectral envelope.
+
+A CONTROL stimulus is included that has no AM or FM.
 
 In all non-BASIC conditions, the partial gains are set to a "resting" value
 measured from the time-varying spectral envelope at one quarter of a single
@@ -468,6 +473,14 @@ class EnvelopeMorpher:
 
         # Log tracks randomization settings, and order of morphing.
         self._log = []
+
+    def time_average(self):
+        num_frames, num_bins = self.env.shape
+
+        tmp = np.mean(self.env, axis=0)
+        tmp = np.tile(tmp, [num_frames, 1])
+
+        self.env = copy(tmp)
 
     def shuffle_phase(self, num_shifts: int = 4):
         """
