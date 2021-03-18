@@ -21,14 +21,14 @@ def quick_write(_file_path, _filename, _data):
     wavfile.write(write_path, SAMPLE_RATE, _data.astype(np.int16))
 
 
+# Experiment parameters.
+num_subjects = 1
+num_blocks = 2
+repeats_per_block = 4
+
 # Load env as linear amplitude. (CheapTrick calculates the power spectrum.)
 env = single_cycles[0]['env']
 env = np.sqrt(env)
-
-# Experiment parameters.
-num_subjects = 10
-num_blocks = 2
-repeats_per_block = 4
 
 # Synthesis parameters.
 synthesis_params = {

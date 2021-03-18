@@ -60,7 +60,8 @@ import numpy as np
 
 from defaults import EPS, SAMPLE_RATE, PITCH_RATE
 from util import (
-    add_fade, midi_to_hz, normalize, plot_envelope, stft_plot, resample
+    add_fade, midi_to_hz, normalize, plot_envelope, stft_plot, remove_dc,
+    resample
 )
 
 
@@ -172,6 +173,7 @@ class StimulusGenerator:
 
         # Output.
         x = self.synthesize()
+        x = remove_dc(x)
         x = normalize(x)
 
         # Fade in/out.

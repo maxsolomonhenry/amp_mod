@@ -135,6 +135,10 @@ def read_wav(path: str):
     return sample_rate, x
 
 
+def remove_dc(signal: np.ndarray) -> np.ndarray:
+    return signal - np.mean(signal)
+
+
 def resample(
         env: np.ndarray,
         frame_rate: float,
