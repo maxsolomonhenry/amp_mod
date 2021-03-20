@@ -22,7 +22,7 @@ def quick_write(_file_path, _filename, _data):
 
 
 # Experiment parameters.
-num_subjects = 1
+num_subjects = 100
 num_blocks = 2
 repeats_per_block = 4
 

@@ -2,6 +2,9 @@
 audio/ana/**
 audio/syn/**
 
+# Prolific data
+data/**
+
 # Sound files.
 *.wav
 *.mp3
