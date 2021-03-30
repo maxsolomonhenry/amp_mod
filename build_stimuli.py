@@ -22,9 +22,12 @@ def quick_write(_file_path, _filename, _data):
 
 
 # Experiment parameters.
-num_subjects = 100
+num_subjects = 200
 num_blocks = 2
 repeats_per_block = 4
+
+# Use this to start counting from a subject number greater than 0.
+starting_subject = 200
 
 # Load env as linear amplitude. (CheapTrick calculates the power spectrum.)
 env = single_cycles[0]['env']
@@ -44,6 +47,7 @@ synthesis_params = {
 }
 
 for s in range(num_subjects):
+    s += starting_subject
     print(f"\nGenerating stimuli for subject {s}...")
 
     # Make subject directory.

@@ -4,6 +4,7 @@ audio/syn/**
 
 # Prolific data
 data/**
+!data/*.ipynb
 
 # Sound files.
 *.wav
