@@ -5,6 +5,7 @@ audio/syn/**
 # Prolific data
 data/**
 !data/*.ipynb
+!data/*.py
 
 # Sound files.
 *.wav
