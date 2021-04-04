@@ -652,6 +652,7 @@ class EnvelopeMorpher:
 
 
 if __name__ == '__main__':
+    import matplotlib.pyplot as plt
     from analysis import single_cycles
 
     # Helper.
@@ -669,11 +670,21 @@ if __name__ == '__main__':
     # Midi 48 -> C3.
     midi_pitch = 48
 
+    # Debugging.
+    plots = False
+
     synth_out = []
 
     for datum in single_cycles:
         fm_depth = get_fm_depth(datum)
         f0_ = midi_to_hz(midi_pitch)
+
+        if plots:
+            t = np.arange(len(datum['f0']))/PITCH_RATE
+            plt.plot(t, datum['f0'])
+            plt.ylabel('Pitch (hz)')
+            plt.xlabel('Time (sec)')
+            plt.show()
 
         # Bring to linear amplitude. Env is calculated as the power spectrum.
         env_ = np.sqrt(datum['env'])

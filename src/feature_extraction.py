@@ -5,12 +5,13 @@ Tools for extracting timbral features from the stimuli.
 from glob import glob
 import numpy as np
 import matplotlib.pyplot as plt
+import matlab.engine
 import os
 import pandas as pd
-import pickle
+from tqdm import tqdm
 
-from src.defaults import SYN_PATH
-from src.util import read_wav
+from src.defaults import DATA_PATH, TIMBRE_TOOLBOX_PATH, SYN_PATH
+from src.util import matlab2np, np2matlab, read_wav, save_pickle
 
 
 def extract_trials(df):
@@ -19,7 +20,15 @@ def extract_trials(df):
     return df
 
 
-def load(pattern='./prolific/*.csv'):
+def init_matlab():
+    print('Starting Matlab engine...')
+    eng = matlab.engine.start_matlab()
+    eng.addpath(eng.genpath(TIMBRE_TOOLBOX_PATH))
+    return eng
+
+
+def load(datapath=DATA_PATH):
+    pattern = os.path.join(datapath, 'prolific/*.csv')
     files = glob(pattern)
     assert files, 'No csv data found.'
 
@@ -31,9 +40,11 @@ def load(pattern='./prolific/*.csv'):
     return df
 
 
-def replace_path_to_local(path):
-    """Replace path with path to local file."""
-    dir_, file_ = os.path.split(path)
+def replace_path_to_local(_path):
+    """
+    Replace path with path to local file.
+    """
+    dir_, file_ = os.path.split(_path)
 
     tmp = dir_.split("/")
     tmp[0] = SYN_PATH
@@ -42,16 +53,61 @@ def replace_path_to_local(path):
     return os.path.join(tmp, file_)
 
 
+def timbre_toolbox(filepath, _eng):
+    """
+    Coupled to script `pyTimbre.m`
+    """
+
+    _data = _eng.pyTimbre(filepath, nargout=5)
+
+    descriptor_names = [
+        'energy',
+        'spectral_centroid',
+        'spectral_crest',
+        'spectral_flatness',
+        'odd_even_ratio',
+    ]
+
+    out_ = {}
+
+    for i, _datum in enumerate(_data):
+        out_[descriptor_names[i]] = matlab2np(_datum)
+
+    return out_
+
+
 if __name__ == '__main__':
-    # Tests.
+
+    # Pickle filename.
+    pickle_name = 'TT_features.pickle'
+    pickle_path = os.path.join(DATA_PATH, pickle_name)
+
+    # Generate data.
+    eng = init_matlab()
 
     df = load()
     df = extract_trials(df)
 
     paths = df['stimulus'].tolist()
 
-    for path in paths:
-        path = replace_path_to_local(path)
-        sr, x = read_wav(path)
+    all_data = []
 
-        print(sr)
+    for path in tqdm(paths):
+        localpath = replace_path_to_local(path)
+
+        data = timbre_toolbox(localpath, eng)
+        data['stimulus'] = path
+
+        all_data.append(data)
+
+    save_pickle(pickle_path, all_data, force=False)
+
+    # if debug:
+    #     from src.util import load_pickle
+    #     import pandas as pd
+    #
+    #     tmp = load_pickle(pickle_path)
+    #     tmp = pd.DataFrame(tmp)
+    #
+    #     test = pd.merge(tmp, df, on='stimulus')
+    #     print(test)

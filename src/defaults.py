@@ -1,5 +1,7 @@
 """
 Defaults and globals.
+
+Note, users will have to specify their own path to the Timbre Toolbox.
 """
 
 import os
@@ -31,3 +33,4 @@ real_path = RealPath()
 ANA_PATH = real_path('../audio/ana')
 SYN_PATH = real_path('../audio/syn')
 DATA_PATH = real_path('../data')
+TIMBRE_TOOLBOX_PATH = real_path('../matlab/timbretoolbox')

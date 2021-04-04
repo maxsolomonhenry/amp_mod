@@ -7,6 +7,10 @@ data/**
 !data/*.ipynb
 !data/*.py
 
+# Timbre toolbox
+matlab/timbretoolbox/**
+!matlab/timbretoolbox/pyTimbre.m
+
 # Sound files.
 *.wav
 *.mp3

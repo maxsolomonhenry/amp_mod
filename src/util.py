@@ -4,6 +4,7 @@ General utilities.
 
 import librosa
 import librosa.display
+import matlab
 import matplotlib.pyplot as plt
 import numpy as np
 import os
@@ -85,8 +86,8 @@ def hz_to_midi(hz: np.ndarray) -> np.ndarray:
     return np.maximum(0, 12 * np.log2((hz + EPS)/440) + 69)
 
 
-def load_data(path: str):
-    assert os.path.isfile(path), 'Missing pickle. Run analysis.py'
+def load_pickle(path: str):
+    assert os.path.isfile(path), f"Missing file:\t{path}..."
 
     with open(path, 'rb') as handle:
         return pickle.load(handle)
@@ -110,6 +111,13 @@ def low_pass(
     return out_
 
 
+def matlab2np(input_: matlab.double):
+    """
+    Convert Matlab double to numpy array.
+    """
+    return np.array(input_._data)
+
+
 def midi_to_hz(midi: Union[float, int, np.ndarray]) -> Union[float, np.ndarray]:
     """
     Converts from linear pitch space to Hz, where A440 = midi:69.
@@ -122,6 +130,20 @@ def normalize(x: np.ndarray) -> np.ndarray:
     Normalize array by max value.
     """
     return x / np.max(np.abs(x))
+
+
+def np2matlab(input_: np.ndarray):
+    """
+    Convert numpy array to Matlab double.
+    """
+    return matlab.double(input_.tolist())[0]
+
+
+def num2matlab(input_: Union[float, int]):
+    """
+    Convert single value to Matlab double.
+    """
+    return matlab.double([input_])
 
 
 def plot_envelope(env, show=True):
@@ -162,23 +184,21 @@ def resample(
     return f(np.arange(num_samples))
 
 
-def save_data(path: str, data, force: bool = False):
-    if force is False:
-        assert not os.path.isfile(path), 'File {} already exists.'.format(
-            os.path.basename(path)
-        )
-    else:
-        warnings.warn('Forcing overwrite...')
-
-    print('Saving file {}...'.format(os.path.basename(path)))
-    with open(path, 'wb') as handle:
-        pickle.dump(data, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-
 def safe_mkdir(path):
     if not os.path.exists(path):
         Warning(f"Creating directory {path}...")
         os.mkdir(path)
+
+
+def save_pickle(path: str, data, force: bool = False):
+    if force is False:
+        assert not os.path.isfile(path), 'File {} already exists.'.format(
+            os.path.basename(path)
+        )
+
+    print('Saving file {}...'.format(os.path.basename(path)))
+    with open(path, 'wb') as handle:
+        pickle.dump(data, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 def stft_plot(
