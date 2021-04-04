@@ -1,4 +1,4 @@
-###Note:
+### Note:
 
 To run this code, you'll have to have a version of the timbretoolbox in this directory, which I have not uploaded. You'll also have to use my script, `pyTimbre.py` to interface with the Matlab-Python engine.
 
