@@ -78,9 +78,12 @@ def timbre_toolbox(filepath, _eng):
 
 if __name__ == '__main__':
 
-    # Pickle filename.
-    pickle_name = 'TT_features.pickle'
-    pickle_path = os.path.join(DATA_PATH, pickle_name)
+    # Pickle file paths.
+    timbretoolbox_name = 'TT_features.pickle'
+    timbretoolbox_pickle_path = os.path.join(DATA_PATH, timbretoolbox_name)
+
+    auditory_name = 'modulation_features.pickle'
+    auditory_pickle_path = os.path.join(DATA_PATH, auditory_name)
 
     # Generate data.
     eng = init_matlab()
@@ -90,17 +93,17 @@ if __name__ == '__main__':
 
     paths = df['stimulus'].tolist()
 
-    all_data = []
+    all_tt_data = []
 
     for path in tqdm(paths):
         localpath = replace_path_to_local(path)
 
-        data = timbre_toolbox(localpath, eng)
-        data['stimulus'] = path
+        tt_data = timbre_toolbox(localpath, eng)
+        tt_data['stimulus'] = path
 
-        all_data.append(data)
+        all_tt_data.append(tt_data)
 
-    save_pickle(pickle_path, all_data, force=False)
+    save_pickle(timbretoolbox_pickle_path, all_tt_data, force=False)
 
     # if debug:
     #     from src.util import load_pickle
