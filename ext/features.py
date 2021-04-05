@@ -9,7 +9,7 @@ Implementation using a light implementation of the Matlab NLS toolbox by TODO
 import numpy as np
 import math
 from scipy import signal
-from lib import utils
+from ext import utils
 
 
 def spectrum2scaletime(stft, num_channels, num_ch_oct, sr_time, nfft_rate,

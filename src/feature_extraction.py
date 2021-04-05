@@ -10,6 +10,7 @@ import os
 import pandas as pd
 from tqdm import tqdm
 
+from ext.auditory import strf
 from src.defaults import DATA_PATH, TIMBRE_TOOLBOX_PATH, SYN_PATH
 from src.util import matlab2np, np2matlab, read_wav, save_pickle
 
@@ -38,6 +39,16 @@ def load(datapath=DATA_PATH):
         df = df.append(pd.read_csv(file))
 
     return df
+
+
+def make_modulation_representation(_path):
+    """
+    Return time-averaged, complex valued STRF. (freq x scale x rate)
+    """
+    sr, x = read_wav(_path)
+    tmp = strf(x, sr, duration=-1)
+    tmp = np.abs(tmp)
+    return np.mean(tmp, axis=0)
 
 
 def replace_path_to_local(_path):
@@ -78,9 +89,16 @@ def timbre_toolbox(filepath, _eng):
 
 if __name__ == '__main__':
 
-    # Pickle filename.
-    pickle_name = 'TT_features.pickle'
-    pickle_path = os.path.join(DATA_PATH, pickle_name)
+    # Flags.
+    use_timbre_toolbox = False
+    use_auditory_model = True
+
+    # Pickle file paths.
+    timbretoolbox_name = 'TT_features.pickle'
+    timbretoolbox_pickle_path = os.path.join(DATA_PATH, timbretoolbox_name)
+
+    auditory_name = 'modulation_features.pickle'
+    auditory_pickle_path = os.path.join(DATA_PATH, auditory_name)
 
     # Generate data.
     eng = init_matlab()
@@ -90,17 +108,29 @@ if __name__ == '__main__':
 
     paths = df['stimulus'].tolist()
 
-    all_data = []
+    all_tt_data = []
+    all_aud_data = []
 
     for path in tqdm(paths):
         localpath = replace_path_to_local(path)
 
-        data = timbre_toolbox(localpath, eng)
-        data['stimulus'] = path
+        if use_timbre_toolbox:
+            tt_data = timbre_toolbox(localpath, eng)
+            tt_data['stimulus'] = path
 
-        all_data.append(data)
+            all_tt_data.append(tt_data)
 
-    save_pickle(pickle_path, all_data, force=False)
+        if use_auditory_model:
+            aud_data = dict()
+            aud_data['strf'] = make_modulation_representation(localpath)
+            aud_data['stimulus'] = path
+
+            all_aud_data.append(aud_data)
+
+    if use_timbre_toolbox:
+        save_pickle(timbretoolbox_pickle_path, all_tt_data, force=False)
+    if use_auditory_model:
+        save_pickle(auditory_pickle_path, all_aud_data, force=False)
 
     # if debug:
     #     from src.util import load_pickle
