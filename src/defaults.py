@@ -23,6 +23,9 @@ class RealPath:
 # Small value.
 EPS = 1e-8
 
+# Large value for data analysis.
+MAX_INTEGER = 2**53 - 1
+
 # Sample rates.
 SAMPLE_RATE = 44100
 PITCH_RATE = 200
